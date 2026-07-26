@@ -1,0 +1,45 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: var(--font-size-base);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+input,
+select {
+  font: inherit;
+}
+
+h1 {
+  font-size: 22px;
+  margin: 0 0 var(--spacing-md);
+}
+
+h2 {
+  font-size: 18px;
+  margin: 0 0 var(--spacing-md);
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}

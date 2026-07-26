@@ -1,0 +1,14 @@
+{
+  "name": "inventaire-domestique",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:pwa": "npm run dev --workspace=apps/pwa",
+    "build:pwa": "npm run build --workspace=apps/pwa",
+    "test:shared": "npm run test --workspace=packages/shared"
+  }
+}

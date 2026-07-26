@@ -1,0 +1,30 @@
+.merge-toast {
+  position: fixed;
+  left: var(--spacing-md);
+  right: var(--spacing-md);
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px) + var(--spacing-md));
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  border-radius: var(--radius);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 50;
+}
+
+.merge-toast__message {
+  font-weight: 600;
+}
+
+.merge-toast__undo {
+  align-self: flex-start;
+  min-height: var(--tap-target);
+  padding: 0 var(--spacing-md);
+  background: transparent;
+  border: 2px solid var(--color-primary-contrast);
+  border-radius: var(--radius);
+  color: var(--color-primary-contrast);
+  font-weight: 700;
+}

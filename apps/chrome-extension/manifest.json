@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Inventaire Domestique — Import Chronodrive",
+  "version": "0.1.0",
+  "description": "Importe les articles d'une commande Chronodrive dans l'inventaire domestique partagé (Google Sheets).",
+  "permissions": ["identity", "storage", "activeTab"],
+  "host_permissions": [
+    "*://www.chronodrive.com/*",
+    "https://sheets.googleapis.com/*"
+  ],
+  "oauth2": {
+    "client_id": "__GOOGLE_OAUTH_CLIENT_ID__",
+    "scopes": ["https://www.googleapis.com/auth/spreadsheets"]
+  },
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://www.chronodrive.com/*"],
+      "js": ["content-scripts/chronodrive-scraper.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Inventaire Domestique"
+  }
+}

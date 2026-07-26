@@ -1,0 +1,83 @@
+.product-in__method-switch {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.product-in__method-btn {
+  flex: 1;
+  min-height: var(--tap-target);
+  border-radius: var(--radius);
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.product-in__method-btn--active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+
+.product-in__scan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.product-in__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.product-in__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  font-weight: 600;
+}
+
+.product-in__field input,
+.product-in__field select {
+  min-height: var(--tap-target);
+  padding: 0 var(--spacing-md);
+  border-radius: var(--radius);
+  border: 2px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.product-in__row {
+  display: flex;
+  gap: var(--spacing-md);
+}
+
+.product-in__row .product-in__field {
+  flex: 1;
+}
+
+.product-in__submit {
+  min-height: var(--tap-target);
+  border-radius: var(--radius);
+  border: none;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.product-in__cancel {
+  min-height: var(--tap-target);
+  border-radius: var(--radius);
+  border: 2px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.product-in__error {
+  color: var(--color-danger);
+  font-weight: 600;
+}
