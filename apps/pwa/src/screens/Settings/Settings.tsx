@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { requestAccessToken, signOut } from '../../services/googleAuth';
+import { getCachedToken, signOut } from '../../services/googleAuth';
 import { useInventoryStore } from '../../store/inventoryStore';
 import '../../styles/Settings.css';
 
@@ -9,8 +9,11 @@ export function Settings() {
   const pendingCount = useInventoryStore((s) => s.pendingCount);
   const utilisateur = useInventoryStore((s) => s.utilisateur);
   const setUtilisateur = useInventoryStore((s) => s.setUtilisateur);
+  const syncNow = useInventoryStore((s) => s.syncNow);
+  const syncing = useInventoryStore((s) => s.syncing);
+  const syncError = useInventoryStore((s) => s.syncError);
 
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState(() => Boolean(getCachedToken()));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [spreadsheetId, setSpreadsheetId] = useState('');
@@ -24,8 +27,10 @@ export function Settings() {
     setBusy(true);
     setError(null);
     try {
-      await requestAccessToken();
-      setConnected(true);
+      // interactive: true -> requestAccessToken() peut ouvrir le popup de consentement,
+      // légitime ici car déclenché par un clic direct de l'utilisateur.
+      await syncNow({ interactive: true });
+      setConnected(Boolean(getCachedToken()));
     } catch (err) {
       setError('Échec de la connexion à Google. Réessayez.');
     } finally {
@@ -97,6 +102,15 @@ export function Settings() {
         <p className="settings__pending">
           {pendingCount > 0 ? `${pendingCount} opération(s) en attente de synchronisation` : 'Tout est synchronisé.'}
         </p>
+        <button
+          type="button"
+          className="settings__button"
+          onClick={() => syncNow({ interactive: true })}
+          disabled={syncing}
+        >
+          {syncing ? 'Synchronisation…' : 'Synchroniser maintenant'}
+        </button>
+        {syncError && <p className="settings__error">{syncError}</p>}
       </section>
     </div>
   );

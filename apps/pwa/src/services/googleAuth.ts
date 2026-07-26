@@ -150,10 +150,19 @@ export function getConfiguredClientId(): string {
   return clientId;
 }
 
+const SPREADSHEET_ID_STORAGE_KEY = 'inventaire.spreadsheetId';
+
+/**
+ * L'écran Réglages permet de saisir/écraser l'ID du spreadsheet sans reconstruire
+ * l'app (utile pour pointer une instance déjà déployée vers un autre Sheet). Cette
+ * surcharge locale est donc prioritaire sur VITE_SPREADSHEET_ID, qui reste la valeur
+ * par défaut au premier lancement.
+ */
 export function getConfiguredSpreadsheetId(): string {
-  const spreadsheetId = import.meta.env.VITE_SPREADSHEET_ID;
+  const override = typeof localStorage !== 'undefined' ? localStorage.getItem(SPREADSHEET_ID_STORAGE_KEY) : null;
+  const spreadsheetId = override || import.meta.env.VITE_SPREADSHEET_ID;
   if (!spreadsheetId) {
-    throw new Error('VITE_SPREADSHEET_ID manquant dans la configuration du build');
+    throw new Error('Aucun ID de spreadsheet configuré (ni Réglages, ni VITE_SPREADSHEET_ID au build)');
   }
   return spreadsheetId;
 }

@@ -18,6 +18,8 @@ export function InventoryList({ onSelectLine }: InventoryListProps) {
   const filterCategory = useInventoryStore((s) => s.filterCategory);
   const setFilterCategory = useInventoryStore((s) => s.setFilterCategory);
   const pendingCount = useInventoryStore((s) => s.pendingCount);
+  const syncNow = useInventoryStore((s) => s.syncNow);
+  const syncing = useInventoryStore((s) => s.syncing);
 
   const visibleLines = useMemo(() => {
     const filtered = filterCategory === 'toutes' ? lines : lines.filter((l) => l.categorie === filterCategory);
@@ -36,6 +38,15 @@ export function InventoryList({ onSelectLine }: InventoryListProps) {
             {pendingCount} en attente
           </span>
         )}
+        <button
+          type="button"
+          className="inventory-list__refresh"
+          onClick={() => syncNow({ interactive: true })}
+          disabled={syncing}
+          aria-label="Rafraîchir l'inventaire"
+        >
+          {syncing ? '…' : '⟳'}
+        </button>
       </header>
 
       <CategoryFilter value={filterCategory} onChange={setFilterCategory} />

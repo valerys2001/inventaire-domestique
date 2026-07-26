@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import type { Category, InventoryLine, MovementType, PendingOperation } from '@inventaire/shared';
 import { resolveMerge, type CandidateEntry, type MergeDecision } from '@inventaire/shared';
-import { getCachedInventory } from '../services/localCache';
-import { enqueue, getPendingCount } from '../services/offlineQueue';
+import { getCachedInventory, setCachedInventory } from '../services/localCache';
+import { enqueue, flush, getPendingCount } from '../services/offlineQueue';
+import { fetchInventory } from '../services/sheetsClient';
+import { getConfiguredSpreadsheetId, requestAccessToken } from '../services/googleAuth';
 
 const UTILISATEUR_STORAGE_KEY = 'inventaire.utilisateur';
 
@@ -52,8 +54,17 @@ interface InventoryStoreState {
   filterCategory: Category | 'toutes';
   utilisateur: string;
   lastEntry: LastEntryRecord | null;
+  syncing: boolean;
+  syncError: string | null;
   loadFromCache: () => Promise<void>;
   refreshPendingCount: () => Promise<void>;
+  /**
+   * Pousse d'abord la file locale (flush) puis relit le Sheet, dans cet ordre :
+   * si on relisait avant de pousser, les opérations pas encore synchronisées de CET
+   * appareil seraient écrasées par l'état serveur (elles ne sont déjà "vues" que dans
+   * le cache local optimiste, pas encore côté serveur).
+   */
+  syncNow: (options?: { interactive?: boolean }) => Promise<void>;
   applyEntry: (candidate: CandidateEntry) => Promise<MergeDecision>;
   applyExit: (payload: ExitPayload) => Promise<void>;
   setFilterCategory: (category: Category | 'toutes') => void;
@@ -68,6 +79,8 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
   filterCategory: 'toutes',
   utilisateur: readStoredUtilisateur(),
   lastEntry: null,
+  syncing: false,
+  syncError: null,
 
   loadFromCache: async () => {
     const lines = await getCachedInventory();
@@ -78,6 +91,32 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
   refreshPendingCount: async () => {
     const pendingCount = await getPendingCount();
     set({ pendingCount });
+  },
+
+  syncNow: async ({ interactive = false } = {}) => {
+    if (get().syncing) return;
+    set({ syncing: true, syncError: null });
+    try {
+      const spreadsheetId = getConfiguredSpreadsheetId();
+      // requestAccessToken() ne renvoie une popup de consentement que si aucun jeton
+      // n'est en cache ; un appel non-interactif (ex. au démarrage de l'app) échoue
+      // silencieusement dans ce cas plutôt que d'en déclencher une sans geste utilisateur.
+      const token = await requestAccessToken().catch((err) => {
+        if (interactive) throw err;
+        return null;
+      });
+      if (!token) return;
+
+      await flush(spreadsheetId, token);
+      const serverLines = await fetchInventory(spreadsheetId, token);
+      await setCachedInventory(serverLines);
+      set({ lines: serverLines });
+      await get().refreshPendingCount();
+    } catch (err) {
+      set({ syncError: err instanceof Error ? err.message : 'Synchronisation impossible.' });
+    } finally {
+      set({ syncing: false });
+    }
   },
 
   applyEntry: async (candidate) => {
@@ -173,6 +212,15 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
     set({ utilisateur });
   },
 
+  /**
+   * `cle_fusion` doit rester unique par ligne : c'est la clé sur laquelle Backend-Sync
+   * relit la valeur serveur avant d'appliquer un delta, et sur laquelle `resolveMerge`
+   * recherche une ligne existante. Créer une seconde ligne portant la même clé (une
+   * vraie "séparation") rendrait les deux lignes indiscernables pour ces deux
+   * mécanismes. "Annuler" ne fait donc qu'annuler la fusion (retire le delta ajouté) ;
+   * une séparation réelle n'a de sens que pour une contenance unitaire différente,
+   * ce qui crée déjà naturellement une `cle_fusion` distincte via une saisie normale.
+   */
   undoLastEntry: async () => {
     const state = get();
     const { lastEntry } = state;
@@ -191,23 +239,9 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
       date_maj: nowIso,
       utilisateur,
     };
-    const separateLine: InventoryLine = {
-      id: crypto.randomUUID(),
-      nom: candidate.nom,
-      marque: candidate.marque,
-      categorie: candidate.categorie,
-      contenance_unitaire: candidate.contenance_unitaire,
-      unite: candidate.unite,
-      quantite_totale: candidate.delta,
-      code_barre: candidate.code_barre ?? null,
-      date_maj: nowIso,
-      utilisateur,
-      cle_fusion: decision.cle_fusion,
-      seuil_alerte: null,
-    };
 
     set({
-      lines: state.lines.map((line) => (line.id === target.id ? revertedLine : line)).concat(separateLine),
+      lines: state.lines.map((line) => (line.id === target.id ? revertedLine : line)),
       lastEntry: null,
     });
 
@@ -217,15 +251,6 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
       line_snapshot: toLineSnapshot(revertedLine, utilisateur),
       delta: -candidate.delta,
       type: 'sortie',
-      utilisateur,
-      created_at: nowIso,
-    });
-    await enqueue({
-      local_id: crypto.randomUUID(),
-      cle_fusion: decision.cle_fusion,
-      line_snapshot: toLineSnapshot(separateLine, utilisateur),
-      delta: candidate.delta,
-      type: inferEntryType(candidate),
       utilisateur,
       created_at: nowIso,
     });

@@ -11,7 +11,9 @@ interface MergeConfirmDialogProps {
 /**
  * Décision UX : fusion automatique silencieuse, pas de modale bloquante.
  * Ce composant est un toast temporisé affiché après coup, avec un lien pour
- * annuler la fusion et séparer l'entrée en ligne distincte.
+ * annuler la fusion (retire le delta ajouté). Une vraie ligne séparée n'a de
+ * sens que pour une contenance unitaire différente, ce que la clé de fusion
+ * gère déjà nativement — "annuler" ne doit donc jamais dupliquer la cle_fusion.
  */
 export function MergeConfirmDialog({ message, durationMs = 6000, onUndo, onDismiss }: MergeConfirmDialogProps) {
   const [visible, setVisible] = useState(true);
@@ -39,7 +41,7 @@ export function MergeConfirmDialog({ message, durationMs = 6000, onUndo, onDismi
           onUndo();
         }}
       >
-        Annuler / séparer en ligne distincte
+        Annuler la fusion
       </button>
     </div>
   );

@@ -15,6 +15,16 @@
   white-space: nowrap;
 }
 
+.inventory-list__refresh {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 20px;
+  line-height: 1;
+}
+
 .inventory-list__items {
   display: flex;
   flex-direction: column;

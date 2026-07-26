@@ -74,7 +74,7 @@ export function ProductIn() {
         categorie: result.categorie_suggeree ?? CATEGORIES[0],
         contenance_unitaire: result.contenance_unitaire ? String(result.contenance_unitaire) : '',
         unite: result.unite ?? 'unite',
-        nombre_contenants: '1',
+        nombre_contenants: result.nombre_contenants ? String(result.nombre_contenants) : '1',
         code_barre: result.code_barre,
         isKnownProduct: result.source !== 'manuel',
       });
