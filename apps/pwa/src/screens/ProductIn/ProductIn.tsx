@@ -48,12 +48,17 @@ export function ProductIn() {
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [form, setForm] = useState<EntryForm | null>(null);
   const [toast, setToast] = useState<{ message: string } | null>(null);
+  // Change de clé à chaque tentative -> démontage/remontage complet de <BarcodeScanner>, pour
+  // repartir d'un flux caméra garanti neuf si un précédent flux est resté bloqué côté navigateur
+  // (observé sur Android : la caméra reste "active" sans qu'aucune image ne s'affiche).
+  const [scannerKey, setScannerKey] = useState(0);
 
   const startScan = () => {
     setMethod('scan');
     setForm(null);
     setScanActive(true);
     setLookupError(null);
+    setScannerKey((k) => k + 1);
   };
 
   const startManuel = () => {
@@ -141,12 +146,16 @@ export function ProductIn() {
       {method === 'scan' && !form && (
         <div className="product-in__scan">
           <BarcodeScanner
+            key={scannerKey}
             onDetected={handleDetected}
             active={scanActive}
-            onError={() => setLookupError('Caméra indisponible.')}
+            onError={(err) => setLookupError(`Caméra indisponible : ${err.name} — ${err.message}`)}
           />
           {lookupBusy && <p>Recherche du produit…</p>}
           {lookupError && <p className="product-in__error">{lookupError}</p>}
+          <button type="button" className="product-in__retry" onClick={() => setScannerKey((k) => k + 1)}>
+            Réessayer la caméra
+          </button>
         </div>
       )}
 

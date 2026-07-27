@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BrowserCodeReader, BrowserMultiFormatReader } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType, NotFoundException } from '@zxing/library';
 import type { IScannerControls } from '@zxing/browser';
 
@@ -72,7 +72,12 @@ export function BarcodeScanner({ onDetected, onError, active }: BarcodeScannerPr
         }
 
         // NotFoundException est levée à chaque frame sans code-barres détecté : ce n'est pas une vraie erreur.
-        if (err && !(err instanceof NotFoundException)) {
+        // IndexSizeError : zxing tente de lire une frame avant que la vidéo n'ait ses dimensions prêtes
+        // (largeur/hauteur encore à 0, typiquement sur les tout premiers appels sur mobile) — transitoire,
+        // la frame suivante se décode normalement une fois la vidéo prête ; ne pas la remonter comme une
+        // vraie erreur bloquante.
+        const isTransientFrameGlitch = err instanceof NotFoundException || (err instanceof Error && err.name === 'IndexSizeError');
+        if (err && !isTransientFrameGlitch) {
           onErrorRef.current?.(toError(err));
         }
       })
@@ -88,6 +93,15 @@ export function BarcodeScanner({ onDetected, onError, active }: BarcodeScannerPr
       cancelled = true;
       controlsRef.current?.stop();
       controlsRef.current = null;
+      // Filet de sécurité indépendant de `controls.stop()` : sur certains Android, un flux
+      // caméra mal relâché empêche le prochain getUserMedia() de ré-aboutir (aucune erreur,
+      // aucune vidéo - la requête reste simplement en attente). releaseAllStreams() est la
+      // méthode zxing dédiée qui coupe tous les MediaStream qu'elle a créés ; on coupe aussi
+      // explicitement les pistes de la vidéo elle-même par sécurité supplémentaire.
+      BrowserCodeReader.releaseAllStreams();
+      const stream = videoRef.current?.srcObject as MediaStream | null;
+      stream?.getTracks().forEach((track) => track.stop());
+      if (videoRef.current) videoRef.current.srcObject = null;
     };
   }, [active]);
 

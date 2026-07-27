@@ -3,6 +3,14 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  // `server` (vite dev) et `preview` (vite preview) ont chacun leur propre config Vite,
+  // il faut donc autoriser les hosts de tunnel de test (serveo.net, loca.lt...) sur les deux.
+  server: {
+    allowedHosts: true,
+  },
+  preview: {
+    allowedHosts: true,
+  },
   plugins: [
     react(),
     VitePWA({
