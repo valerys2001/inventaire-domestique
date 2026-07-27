@@ -53,6 +53,38 @@ let tokenClient: TokenClient | null = null;
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
 
+// Résolveurs de la demande de jeton en cours. Google Identity Services n'invoque pas de façon
+// fiable les `callback`/`error_callback` passés en argument à `requestAccessToken()` — dans
+// certains cas la réponse est livrée au callback fourni à `initTokenClient()` à l'initialisation
+// à la place (comportement non garanti par la doc). D'où l'écoute sur LES DEUX à la fois, routées
+// vers ce résolveur partagé : quel que soit celui que Google invoque réellement, on le capte.
+let pendingResolve: ((token: string) => void) | null = null;
+let pendingReject: ((err: Error) => void) | null = null;
+
+function settlePendingToken(response: TokenResponse): void {
+  if (!pendingResolve || !pendingReject) return; // aucune demande en cours (déjà réglée ou expirée)
+  const resolve = pendingResolve;
+  const reject = pendingReject;
+  pendingResolve = null;
+  pendingReject = null;
+
+  if (response.error) {
+    reject(new Error(response.error_description ?? response.error));
+    return;
+  }
+  cachedToken = response.access_token;
+  tokenExpiresAt = Date.now() + response.expires_in * 1000;
+  resolve(response.access_token);
+}
+
+function rejectPendingToken(error: Error): void {
+  if (!pendingReject) return;
+  const reject = pendingReject;
+  pendingResolve = null;
+  pendingReject = null;
+  reject(error);
+}
+
 function loadGsiScript(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (window.google?.accounts?.oauth2) {
@@ -86,15 +118,15 @@ export function initGoogleAuth(clientId: string): Promise<void> {
     tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: SPREADSHEETS_SCOPE,
-      callback: () => {},
+      callback: settlePendingToken,
+      error_callback: (error) => rejectPendingToken(new Error(error.message ?? error.type)),
     });
   });
 }
 
-// Filet de sécurité : sur certains navigateurs/scénarios, la popup GIS peut se fermer
-// (consentement donné ou non) sans que ni `callback` ni `error_callback` ne soit jamais
-// invoqué (cas limite non documenté du SDK). Sans timeout, la promesse resterait bloquée
-// indéfiniment et gèlerait silencieusement tout appelant (ex: syncNow) avec elle.
+// Filet de sécurité additionnel : si même le callback d'initialisation ne se déclenche jamais
+// (popup fermée manuellement sans action, écran d'erreur Google non reconnu comme tel, etc.),
+// on ne reste pas bloqué indéfiniment et on ne gèle pas silencieusement l'appelant (ex: syncNow).
 const ACCESS_TOKEN_TIMEOUT_MS = 20_000;
 
 export function requestAccessToken(): Promise<string> {
@@ -107,30 +139,22 @@ export function requestAccessToken(): Promise<string> {
   }
 
   const tokenPromise = new Promise<string>((resolve, reject) => {
+    pendingResolve = resolve;
+    pendingReject = reject;
+    // Les callback/error_callback ci-dessous sont fournis en plus par sécurité (au cas où GIS les
+    // honore réellement pour cet appel précis) mais settlePendingToken/rejectPendingToken sont
+    // idempotents : peu importe lequel des deux jeux de callbacks Google invoque en pratique.
     tokenClient!.requestAccessToken({
-      callback: (response) => {
-        if (response.error) {
-          reject(new Error(response.error_description ?? response.error));
-          return;
-        }
-        cachedToken = response.access_token;
-        tokenExpiresAt = Date.now() + response.expires_in * 1000;
-        resolve(response.access_token);
-      },
-      error_callback: (error) => {
-        reject(new Error(error.message ?? error.type));
-      },
+      callback: settlePendingToken,
+      error_callback: (error) => rejectPendingToken(new Error(error.message ?? error.type)),
     });
   });
 
-  const timeoutPromise = new Promise<string>((_, reject) => {
-    setTimeout(
-      () => reject(new Error('Délai dépassé en attendant la réponse de Google (popup fermée sans réponse ?).')),
-      ACCESS_TOKEN_TIMEOUT_MS,
-    );
-  });
+  setTimeout(() => {
+    rejectPendingToken(new Error('Délai dépassé en attendant la réponse de Google (popup fermée sans réponse ?).'));
+  }, ACCESS_TOKEN_TIMEOUT_MS);
 
-  return Promise.race([tokenPromise, timeoutPromise]);
+  return tokenPromise;
 }
 
 export function getCachedToken(): string | null {
