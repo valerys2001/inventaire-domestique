@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { buildMergeKey, UNIT_LABELS } from '@inventaire/shared';
+import { buildMergeKey, formatQuantityDetailed, UNIT_LABELS } from '@inventaire/shared';
 import { BarcodeScanner } from '../../components/BarcodeScanner/BarcodeScanner';
 import { lookupProduct } from '../../services/productLookup';
 import { UnitSelector } from '../../components/UnitSelector/UnitSelector';
@@ -145,9 +145,7 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
                 <span>
                   {line.nom} {line.marque}
                 </span>
-                <span>
-                  {line.quantite_totale} {UNIT_LABELS[line.unite]}
-                </span>
+                <span>{formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}</span>
               </button>
             </li>
           ))}
@@ -161,7 +159,8 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
             {selectedLine.nom} {selectedLine.marque}
           </h2>
           <p>
-            En stock : {selectedLine.quantite_totale} {UNIT_LABELS[selectedLine.unite]}
+            En stock :{' '}
+            {formatQuantityDetailed(selectedLine.quantite_totale, selectedLine.contenance_unitaire, selectedLine.unite)}
           </p>
           <UnitSelector unite={selectedLine.unite} value={amount} onChange={setAmount} />
           <button type="button" className="product-out__submit" onClick={handleRetirer}>

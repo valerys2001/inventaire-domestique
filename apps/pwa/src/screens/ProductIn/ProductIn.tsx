@@ -1,10 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import {
+  buildMergeKey,
   CATEGORIES,
   CATEGORY_LABELS,
   UNITS,
   UNIT_LABELS,
   computeDeltaFromPack,
+  formatQuantityDetailed,
   roundForDisplay,
   type Category,
   type InventoryLine,
@@ -91,21 +93,44 @@ export function ProductIn() {
     return filtered.slice(0, 30);
   }, [chooserQuery, lines]);
 
+  // "Un pack" seul ne veut rien dire : on affiche toujours le total qui sera réellement ajouté
+  // pendant la saisie, avant validation, pas seulement après coup dans la liste.
+  const previewDelta = useMemo(() => {
+    if (!form) return null;
+    const contenance = Number(form.contenance_unitaire);
+    const nombreContenants = Number(form.nombre_contenants) || 1;
+    if (!(contenance > 0) || !(nombreContenants > 0)) return null;
+    return computeDeltaFromPack(nombreContenants, contenance);
+  }, [form?.contenance_unitaire, form?.nombre_contenants]);
+
   const handleDetected = async (barcode: string) => {
     setScanActive(false);
     setLookupBusy(true);
     setLookupError(null);
     try {
       const result = await lookupProduct(barcode);
+
+      // La suggestion de catégorie d'Open*Facts est une heuristique parfois fausse (ex: eau
+      // classée épicerie sucrée, cosmétique classé épicerie fine). Si ce produit a déjà une ligne
+      // dans l'inventaire (même code-barre, ou même nom+marque+contenance), on reprend SA
+      // catégorie déjà établie/corrigée par l'utilisateur plutôt que de reproposer la suggestion
+      // brute à chaque nouveau scan du même article.
+      const cle =
+        result.nom && result.marque && result.contenance_unitaire && result.unite
+          ? buildMergeKey(result.nom, result.marque, result.contenance_unitaire, result.unite)
+          : null;
+      const existing =
+        lines.find((l) => l.code_barre === barcode) ?? (cle ? lines.find((l) => l.cle_fusion === cle) : undefined);
+
       setForm({
-        nom: result.nom ?? '',
-        marque: result.marque ?? '',
-        categorie: result.categorie_suggeree ?? CATEGORIES[0],
-        contenance_unitaire: result.contenance_unitaire ? String(result.contenance_unitaire) : '',
-        unite: result.unite ?? 'unite',
+        nom: existing?.nom ?? result.nom ?? '',
+        marque: existing?.marque ?? result.marque ?? '',
+        categorie: existing?.categorie ?? result.categorie_suggeree ?? CATEGORIES[0],
+        contenance_unitaire: String(existing?.contenance_unitaire ?? result.contenance_unitaire ?? ''),
+        unite: existing?.unite ?? result.unite ?? 'unite',
         nombre_contenants: result.nombre_contenants ? String(result.nombre_contenants) : '1',
         code_barre: result.code_barre,
-        isKnownProduct: result.source !== 'manuel',
+        isKnownProduct: Boolean(existing) || result.source !== 'manuel',
       });
       setMethod('manuel');
     } catch (err) {
@@ -355,6 +380,12 @@ export function ProductIn() {
               onChange={(e) => updateForm({ nombre_contenants: e.target.value })}
             />
           </label>
+
+          {previewDelta !== null && (
+            <p className="product-in__preview">
+              = {formatQuantityDetailed(previewDelta, Number(form.contenance_unitaire), form.unite)} ajouté(s)
+            </p>
+          )}
 
           <label className="product-in__field">
             <span>Code-barre</span>

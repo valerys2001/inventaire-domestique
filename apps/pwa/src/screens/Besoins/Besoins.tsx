@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { CATEGORY_LABELS, UNIT_LABELS } from '@inventaire/shared';
+import { CATEGORY_LABELS, formatQuantityDetailed, UNIT_LABELS } from '@inventaire/shared';
 import { useInventoryStore } from '../../store/inventoryStore';
 import '../../styles/Besoins.css';
 
@@ -35,7 +35,8 @@ export function Besoins() {
             <div className="besoins__item-meta">
               <span className="besoins__item-category">{CATEGORY_LABELS[line.categorie]}</span>
               <span className="besoins__item-qty">
-                {line.quantite_totale} / {line.seuil_alerte} {UNIT_LABELS[line.unite]}
+                {formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)} — seuil : {line.seuil_alerte}{' '}
+                {UNIT_LABELS[line.unite]}
               </span>
             </div>
             <button

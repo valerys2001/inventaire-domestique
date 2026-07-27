@@ -1,4 +1,4 @@
-import type { Unit } from './categories';
+import { UNIT_LABELS, type Unit } from './categories';
 
 /**
  * Calcule la quantité à ajouter au total à partir d'un conditionnement.
@@ -15,6 +15,31 @@ export function computeDeltaFromPack(nombreContenants: number, contenanceUnitair
 /** Arrondi d'affichage (2 décimales) sans accumuler d'erreurs flottantes en stockage. */
 export function roundForDisplay(quantite: number): number {
   return Math.round(quantite * 100) / 100;
+}
+
+/**
+ * "Un pack" ne veut rien dire tout seul : on affiche toujours le total ET le détail par
+ * contenant (ex. "9 L (6 × 1,5 L)"), jamais l'un sans l'autre, dès que la contenance unitaire
+ * est significative. Le nombre de contenants est recalculé depuis quantite_totale/contenance
+ * plutôt que stocké séparément (peut ne plus être un compte entier après une sortie partielle,
+ * ex. un contenant entamé -> "≈X" plutôt qu'un chiffre rond trompeur).
+ */
+export function formatQuantityDetailed(
+  quantiteTotale: number,
+  contenanceUnitaire: number,
+  unite: Unit,
+): string {
+  const total = `${roundForDisplay(quantiteTotale)} ${UNIT_LABELS[unite]}`;
+
+  // Une "contenance unitaire" n'apporte rien de plus quand l'unité EST déjà l'unité de compte
+  // (unite/pourcent), ou quand il n'y a qu'un seul contenant (contenance == total).
+  if (unite === 'unite' || unite === 'pourcent') return total;
+  if (!(contenanceUnitaire > 0) || Math.abs(contenanceUnitaire - quantiteTotale) < 0.001) return total;
+
+  const count = quantiteTotale / contenanceUnitaire;
+  const rounded = Math.round(count);
+  const countLabel = Math.abs(count - rounded) < 0.02 ? `${rounded}` : `≈${count.toFixed(1)}`;
+  return `${total} (${countLabel} × ${roundForDisplay(contenanceUnitaire)} ${UNIT_LABELS[unite]})`;
 }
 
 export interface ParsedQuantity {

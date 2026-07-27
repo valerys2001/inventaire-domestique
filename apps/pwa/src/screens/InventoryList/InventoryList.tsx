@@ -1,5 +1,10 @@
 import { useMemo, useState } from 'react';
-import { CATEGORY_LABELS, DEFAULT_LOW_STOCK_THRESHOLD, UNIT_LABELS, type InventoryLine } from '@inventaire/shared';
+import {
+  CATEGORY_LABELS,
+  DEFAULT_LOW_STOCK_THRESHOLD,
+  formatQuantityDetailed,
+  type InventoryLine,
+} from '@inventaire/shared';
 import { CategoryFilter } from '../../components/CategoryFilter/CategoryFilter';
 import { useInventoryStore } from '../../store/inventoryStore';
 import '../../styles/InventoryList.css';
@@ -80,7 +85,7 @@ export function InventoryList({ onSelectLine }: InventoryListProps) {
                 <div className="inventory-list__item-meta">
                   <span className="inventory-list__item-category">{CATEGORY_LABELS[line.categorie]}</span>
                   <span className={`inventory-list__item-qty${low ? ' inventory-list__item-qty--low' : ''}`}>
-                    {line.quantite_totale} {UNIT_LABELS[line.unite]}
+                    {formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}
                     {low && <span className="inventory-list__badge">Stock bas</span>}
                   </span>
                 </div>
