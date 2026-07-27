@@ -4,7 +4,7 @@ import { resolveMerge, type CandidateEntry, type MergeDecision } from '@inventai
 import { getCachedInventory, setCachedInventory } from '../services/localCache';
 import { enqueue, flush, getPendingCount } from '../services/offlineQueue';
 import { fetchInventory } from '../services/sheetsClient';
-import { getConfiguredSpreadsheetId, requestAccessToken } from '../services/googleAuth';
+import { getCachedToken, getConfiguredSpreadsheetId, requestAccessToken } from '../services/googleAuth';
 
 const UTILISATEUR_STORAGE_KEY = 'inventaire.utilisateur';
 
@@ -98,13 +98,16 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
     set({ syncing: true, syncError: null });
     try {
       const spreadsheetId = getConfiguredSpreadsheetId();
-      // requestAccessToken() ne renvoie une popup de consentement que si aucun jeton
-      // n'est en cache ; un appel non-interactif (ex. au démarrage de l'app) échoue
-      // silencieusement dans ce cas plutôt que d'en déclencher une sans geste utilisateur.
-      const token = await requestAccessToken().catch((err) => {
-        if (interactive) throw err;
-        return null;
-      });
+      // requestAccessToken() ouvre une popup GIS quand aucun jeton n'est en cache ; appelée
+      // hors d'un geste utilisateur direct (ex. au démarrage de l'app), cette popup peut être
+      // bloquée SANS jamais invoquer error_callback (comportement variable selon le navigateur),
+      // ce qui laisserait la promesse — et donc `syncing` — bloqués indéfiniment. On ne l'appelle
+      // donc jamais en mode non-interactif : on se contente du jeton déjà en cache s'il existe.
+      let token = getCachedToken();
+      if (!token) {
+        if (!interactive) return;
+        token = await requestAccessToken();
+      }
       if (!token) return;
 
       await flush(spreadsheetId, token);

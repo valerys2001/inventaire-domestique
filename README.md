@@ -50,7 +50,7 @@ docs/qa-checklist.md    Checklist de recette manuelle.
 
 - `type` : `entree_scan`, `entree_manuelle`, `entree_extension`, ou `sortie`.
 
-3. Notez l'ID du spreadsheet dans son URL : `https://docs.google.com/spreadsheets/d/<ID_ICI>/edit`.
+3. Notez l'ID du spreadsheet dans son URL : `https://docs.google.com/spreadsheets/d/1amnBiOR0zpOb0T6kuprmS1PYiposlT4u0ylar1f7ong/edit?gid=0#gid=0/edit`.
 
 ## 2. Configurer Google Cloud (API + OAuth)
 
