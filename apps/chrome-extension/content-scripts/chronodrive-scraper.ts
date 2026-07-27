@@ -1,83 +1,89 @@
 /**
- * Scraper de la page de commande / panier Chronodrive.
+ * Scraper de la page "Détail du panier" Chronodrive.
  *
- * A AJUSTER APRES INSPECTION REELLE DU DOM CHRONODRIVE : les sélecteurs ci-dessous
- * (ARTICLE_CONTAINER_SELECTORS / FIELD_SELECTORS) sont des suppositions raisonnables
- * basées sur des conventions courantes de sites e-commerce, pas le résultat d'une
- * inspection du DOM réel de chronodrive.com. Avant mise en production : ouvrir une
- * vraie page de panier/commande Chronodrive, inspecter le DOM avec les devtools, et
- * mettre à jour ces listes en conséquence (chaque liste est testée dans l'ordre,
- * le premier sélecteur qui matche est utilisé).
+ * Sélecteurs vérifiés contre le DOM réel (inspection manuelle, juillet 2026) :
+ *   <div class="product-group-wrapper">
+ *     <div class="product-group ...">
+ *       <div class="product-group-content">
+ *         <article data-id="518523" class="product-card ..." aria-label="AUCHAN Pavés de saumon">
+ *           <div class="card-inner">
+ *             <a href="/auchan--paves-de-saumon-P518523" class="card-content-link">
+ *               <div class="card-main">
+ *                 <div class="infos">
+ *                   <span class="info"><span class="label">Poids ou quantité :</span><b>4 x 125 g</b></span>
+ *
+ * Point non vérifié : ce "Poids ou quantité" décrit le conditionnement du PRODUIT
+ * (ex. une boîte de 4x125g), pas forcément le nombre de boîtes commandées si le
+ * client en a pris plusieurs — à confirmer si un champ de quantité commandée
+ * distinct existe ailleurs sur la carte (ex. dans .card-extra, non inspecté).
+ * Chronodrive peut aussi présenter le DOM différemment sur d'autres écrans
+ * (panier en cours vs historique de commande passée) : à revérifier si besoin.
  */
 
 interface ScrapedItem {
   nom: string;
-  quantite: number;
   marque?: string;
+  /** Texte brut du champ "Poids ou quantité" (ex. "4 x 125 g"), parsé côté background via @inventaire/shared. */
+  quantityRaw?: string;
 }
 
-const ARTICLE_CONTAINER_SELECTORS = [
-  '[data-testid="cart-line-item"]',
-  '[data-testid="order-line-item"]',
-  '.cart-item',
-  '.basket-item',
-  '.order-line',
-  'li.product-line',
-];
+const PRODUCT_CARD_SELECTOR = '.product-group-wrapper article.product-card[data-id]';
+// Repli si la page n'a pas (ou plus) le conteneur ".product-group-wrapper" attendu.
+const FALLBACK_PRODUCT_CARD_SELECTOR = 'article.product-card[data-id]';
 
-const FIELD_SELECTORS = {
-  nom: ['[data-testid="product-name"]', '.product-name', '.product-title', 'h3', 'h2'],
-  quantite: ['[data-testid="product-quantity"]', '.quantity', '.qty', 'input[type="number"]'],
-  marque: ['[data-testid="product-brand"]', '.product-brand', '.brand'],
-};
+function findProductCards(): HTMLElement[] {
+  const scoped = Array.from(document.querySelectorAll<HTMLElement>(PRODUCT_CARD_SELECTOR));
+  if (scoped.length > 0) return scoped;
+  return Array.from(document.querySelectorAll<HTMLElement>(FALLBACK_PRODUCT_CARD_SELECTOR));
+}
 
-function queryFirst(root: Element, selectors: string[]): Element | null {
-  for (const selector of selectors) {
-    const el = root.querySelector(selector);
-    if (el) return el;
+/**
+ * `aria-label` du <article> donne le nom complet affiché (ex. "AUCHAN Pavés de saumon").
+ * Le href de la fiche produit (ex. "/auchan--paves-de-saumon-P518523") sépare marque et nom
+ * par un double-tiret : on s'en sert pour couper aria-label au bon endroit avec la bonne casse,
+ * plutôt que de deviner un séparateur dans le texte affiché (qui n'en a pas).
+ */
+function extractNameAndBrand(card: HTMLElement): { nom: string; marque?: string } {
+  const fullLabel = card.getAttribute('aria-label')?.trim() ?? '';
+  const href = card.querySelector<HTMLAnchorElement>('a.card-content-link')?.getAttribute('href') ?? '';
+  const slug = href.split('/').filter(Boolean).pop() ?? '';
+  const brandSlug = slug.split('--')[0] ?? '';
+  const brandGuess = brandSlug.replace(/-/g, ' ').trim();
+
+  if (brandGuess && fullLabel.toLowerCase().startsWith(brandGuess.toLowerCase())) {
+    return {
+      marque: fullLabel.slice(0, brandGuess.length).trim(),
+      nom: fullLabel.slice(brandGuess.length).trim(),
+    };
   }
-  return null;
+
+  // Le slug ne correspond pas au début du libellé (structure de page différente) : on
+  // renvoie tout comme nom plutôt que de risquer de couper le texte au mauvais endroit.
+  return { nom: fullLabel };
 }
 
-function textOf(el: Element | null): string {
-  return el?.textContent?.trim() ?? '';
-}
-
-function parseQuantity(raw: string): number {
-  // Cherche le premier nombre (entier ou décimal) dans le texte, ex "x 2", "Qté : 3".
-  const match = raw.match(/(\d+(?:[.,]\d+)?)/);
-  if (!match) return 1;
-  return Number(match[1].replace(',', '.')) || 1;
-}
-
-function findArticleContainers(): Element[] {
-  for (const selector of ARTICLE_CONTAINER_SELECTORS) {
-    const found = Array.from(document.querySelectorAll(selector));
-    if (found.length > 0) return found;
+/** Repère le bloc ".info" dont le label est "Poids ou quantité" (il peut y en avoir d'autres). */
+function extractQuantityRaw(card: HTMLElement): string | undefined {
+  const infoSpans = Array.from(card.querySelectorAll('.infos .info'));
+  for (const span of infoSpans) {
+    const label = span.querySelector('.label')?.textContent ?? '';
+    if (/quantit|poids/i.test(label)) {
+      const value = span.querySelector('b')?.textContent?.trim();
+      if (value) return value;
+    }
   }
-  return [];
+  return undefined;
 }
 
 function scrapeItems(): ScrapedItem[] {
-  const containers = findArticleContainers();
+  const cards = findProductCards();
   const items: ScrapedItem[] = [];
 
-  for (const container of containers) {
-    const nomEl = queryFirst(container, FIELD_SELECTORS.nom);
-    const nom = textOf(nomEl);
-    if (!nom) continue; // conteneur probablement non pertinent (bandeau, pub, etc.)
+  for (const card of cards) {
+    const { nom, marque } = extractNameAndBrand(card);
+    if (!nom) continue; // carte inattendue (structure différente) : on l'ignore plutôt que d'importer une ligne vide
 
-    const quantiteEl = queryFirst(container, FIELD_SELECTORS.quantite);
-    let quantite = 1;
-    if (quantiteEl) {
-      const rawValue = 'value' in quantiteEl ? (quantiteEl as HTMLInputElement).value : '';
-      quantite = parseQuantity(rawValue || textOf(quantiteEl));
-    }
-
-    const marqueEl = queryFirst(container, FIELD_SELECTORS.marque);
-    const marque = textOf(marqueEl) || undefined;
-
-    items.push({ nom, quantite, marque });
+    items.push({ nom, marque, quantityRaw: extractQuantityRaw(card) });
   }
 
   return items;

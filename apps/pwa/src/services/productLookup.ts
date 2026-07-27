@@ -1,4 +1,6 @@
-import { computeDeltaFromPack, type Category, type ProductLookupResult, type Unit } from '@inventaire/shared';
+import { parseQuantity, type Category, type ProductLookupResult } from '@inventaire/shared';
+
+export { parseQuantity };
 
 const FETCH_TIMEOUT_MS = 5000;
 
@@ -123,76 +125,6 @@ function firstBrand(brands: string | null | undefined): string | null {
   if (!brands) return null;
   const first = brands.split(',')[0]?.trim();
   return first ? first : null;
-}
-
-interface ParsedQuantity {
-  contenanceUnitaire: number;
-  unite: Unit;
-  nombreContenants?: number;
-  deltaPack?: number;
-}
-
-const NUMBER = '\\d+(?:[.,]\\d+)?';
-const PACK_RE = new RegExp(`^(${NUMBER})\\s*x\\s*(${NUMBER})\\s*([a-zµ%]*)$`, 'i');
-const SIMPLE_RE = new RegExp(`^(${NUMBER})\\s*([a-zµ%]*)$`, 'i');
-
-/**
- * Parseur tolérant de `product.quantity` (ex: "1.5 l", "500 g", "6 x 1.5 l", "2x125g").
- * Retourne null si le format n'est pas reconnu (l'UI demandera alors la contenance manuellement).
- */
-export function parseQuantity(raw: string): ParsedQuantity | null {
-  const normalized = raw.trim().toLowerCase().replace(',', '.').replace(/\s+/g, ' ');
-
-  const packMatch = normalized.match(PACK_RE);
-  if (packMatch) {
-    const nombreContenants = parseFloat(packMatch[1]);
-    const rawValue = parseFloat(packMatch[2]);
-    const converted = convertUnit(rawValue, packMatch[3]);
-    if (!converted || nombreContenants <= 0) return null;
-
-    return {
-      contenanceUnitaire: converted.value,
-      unite: converted.unit,
-      nombreContenants,
-      deltaPack: computeDeltaFromPack(nombreContenants, converted.value),
-    };
-  }
-
-  const simpleMatch = normalized.match(SIMPLE_RE);
-  if (simpleMatch) {
-    const rawValue = parseFloat(simpleMatch[1]);
-    const converted = convertUnit(rawValue, simpleMatch[2]);
-    if (!converted) return null;
-
-    return { contenanceUnitaire: converted.value, unite: converted.unit };
-  }
-
-  return null;
-}
-
-function convertUnit(value: number, token: string): { value: number; unit: Unit } | null {
-  if (!Number.isFinite(value) || value <= 0) return null;
-
-  switch (token.trim()) {
-    case 'l':
-    case 'litre':
-    case 'litres':
-      return { value, unit: 'l' };
-    case 'cl':
-      return { value: value * 0.01, unit: 'l' };
-    case 'ml':
-      return { value: value * 0.001, unit: 'l' };
-    case 'kg':
-      return { value: value * 1000, unit: 'g' };
-    case 'g':
-    case 'gr':
-    case 'gramme':
-    case 'grammes':
-      return { value, unit: 'g' };
-    default:
-      // Unité non reconnue (ou absente, ex: "4") : on retombe sur 'unite', laissant l'UI corriger.
-      return { value, unit: 'unite' };
-  }
 }
 
 const HYGIENE_KEYWORDS = [

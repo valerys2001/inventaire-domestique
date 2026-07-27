@@ -91,6 +91,12 @@ export function initGoogleAuth(clientId: string): Promise<void> {
   });
 }
 
+// Filet de sécurité : sur certains navigateurs/scénarios, la popup GIS peut se fermer
+// (consentement donné ou non) sans que ni `callback` ni `error_callback` ne soit jamais
+// invoqué (cas limite non documenté du SDK). Sans timeout, la promesse resterait bloquée
+// indéfiniment et gèlerait silencieusement tout appelant (ex: syncNow) avec elle.
+const ACCESS_TOKEN_TIMEOUT_MS = 20_000;
+
 export function requestAccessToken(): Promise<string> {
   if (cachedToken && Date.now() < tokenExpiresAt) {
     return Promise.resolve(cachedToken);
@@ -100,7 +106,7 @@ export function requestAccessToken(): Promise<string> {
     return Promise.reject(new Error("initGoogleAuth() doit être appelé avant requestAccessToken()"));
   }
 
-  return new Promise<string>((resolve, reject) => {
+  const tokenPromise = new Promise<string>((resolve, reject) => {
     tokenClient!.requestAccessToken({
       callback: (response) => {
         if (response.error) {
@@ -116,6 +122,15 @@ export function requestAccessToken(): Promise<string> {
       },
     });
   });
+
+  const timeoutPromise = new Promise<string>((_, reject) => {
+    setTimeout(
+      () => reject(new Error('Délai dépassé en attendant la réponse de Google (popup fermée sans réponse ?).')),
+      ACCESS_TOKEN_TIMEOUT_MS,
+    );
+  });
+
+  return Promise.race([tokenPromise, timeoutPromise]);
 }
 
 export function getCachedToken(): string | null {

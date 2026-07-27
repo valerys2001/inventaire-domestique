@@ -18,6 +18,8 @@ import {
   inventoryLineToRow,
   movementToRow,
   resolveMerge,
+  parseQuantity,
+  computeDeltaFromPack,
   type CandidateEntry,
   type InventoryLine,
   type Movement,
@@ -30,8 +32,8 @@ import {
 // revalide/retype ici plutôt que d'importer un fichier du content script.
 interface ScrapedItem {
   nom: string;
-  quantite: number;
   marque?: string;
+  quantityRaw?: string;
 }
 
 // Chronodrive ne fournit pas de catégorie exploitable automatiquement (pas d'équivalent
@@ -137,13 +139,23 @@ async function importItems(spreadsheetId: string, items: ScrapedItem[], token: s
   for (const item of items) {
     if (!item?.nom) continue;
 
+    // "Poids ou quantité" décrit le conditionnement du produit (ex. "4 x 125 g" = une
+    // boîte de 4 portions), pas le nombre de boîtes commandées. On l'explose donc en
+    // contenance_unitaire/unite/delta avec le même parseur que le scan (règle 3bis) ;
+    // s'il est absent ou non reconnu, on retombe sur 1 unité (l'utilisateur corrige
+    // ensuite dans la PWA, comme pour la catégorie par défaut).
+    const parsed = item.quantityRaw ? parseQuantity(item.quantityRaw) : null;
+    const contenance_unitaire = parsed?.contenanceUnitaire ?? 1;
+    const unite = parsed?.unite ?? DEFAULT_UNIT;
+    const delta = parsed?.deltaPack ?? (parsed ? computeDeltaFromPack(1, parsed.contenanceUnitaire) : 1);
+
     const candidate: CandidateEntry = {
       nom: item.nom,
       marque: item.marque ?? '',
       categorie: DEFAULT_CATEGORY,
-      contenance_unitaire: 1,
-      unite: DEFAULT_UNIT,
-      delta: item.quantite > 0 ? item.quantite : 1,
+      contenance_unitaire,
+      unite,
+      delta,
       code_barre: null,
     };
 
