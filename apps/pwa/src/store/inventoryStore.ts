@@ -103,19 +103,28 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
       // bloquée SANS jamais invoquer error_callback (comportement variable selon le navigateur),
       // ce qui laisserait la promesse — et donc `syncing` — bloqués indéfiniment. On ne l'appelle
       // donc jamais en mode non-interactif : on se contente du jeton déjà en cache s'il existe.
+      console.info('[sync] début', { interactive, hasSpreadsheetId: Boolean(spreadsheetId) });
       let token = getCachedToken();
+      console.info('[sync] jeton en cache ?', Boolean(token));
       if (!token) {
         if (!interactive) return;
+        console.info('[sync] demande de jeton (requestAccessToken)…');
         token = await requestAccessToken();
+        console.info('[sync] jeton obtenu');
       }
       if (!token) return;
 
+      console.info('[sync] flush()…');
       await flush(spreadsheetId, token);
+      console.info('[sync] flush() terminé, fetchInventory()…');
       const serverLines = await fetchInventory(spreadsheetId, token);
+      console.info('[sync] fetchInventory() terminé', serverLines.length, 'lignes');
       await setCachedInventory(serverLines);
       set({ lines: serverLines });
       await get().refreshPendingCount();
+      console.info('[sync] terminé avec succès');
     } catch (err) {
+      console.error('[sync] erreur', err);
       set({ syncError: err instanceof Error ? err.message : 'Synchronisation impossible.' });
     } finally {
       set({ syncing: false });
