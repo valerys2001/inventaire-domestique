@@ -152,8 +152,13 @@ const CLEANING_KEYWORDS = [
 const FRUIT_KEYWORDS = ['fruit'];
 const VEGETABLE_KEYWORDS = ['vegetable', 'legume'];
 const FRESH_KEYWORDS = ['dairies', 'dairy', 'fresh', 'meat', 'fish', 'cheese', 'yogurt', 'yoghurt', 'milk', 'charcuterie'];
-const SWEET_KEYWORDS = ['sugar', 'sweet', 'chocolate', 'biscuit', 'cake', 'candies', 'dessert', 'beverages', 'waters', 'sodas', 'juice'];
-const SALTY_KEYWORDS = ['salty', 'snack', 'chips', 'pasta', 'rice', 'canned', 'sauces', 'condiment'];
+// Eau, soda, jus, vin, bière... vont dans "Boissons", pas "Épicerie sucrée" (une boisson n'est
+// pas un produit sucré). Testé AVANT les mots-clés sucré/salé pour éviter tout chevauchement
+// (ex. "sweetened-beverages" contient "sweet" mais doit rester une boisson).
+const BEVERAGE_KEYWORDS = ['beverages', 'waters', 'water', 'sodas', 'soda', 'juice', 'wine', 'wines', 'beer', 'beers', 'alcohol', 'alcoholic-beverages'];
+const SWEET_KEYWORDS = ['sugar', 'sweet', 'chocolate', 'biscuit', 'cake', 'candies', 'dessert'];
+// La soupe est salée, pas sucrée, même si "canned" est un indice ambigu par ailleurs.
+const SALTY_KEYWORDS = ['salty', 'snack', 'chips', 'pasta', 'rice', 'canned', 'sauces', 'condiment', 'soup', 'soups', 'soupe'];
 const FINE_KEYWORDS = ['gourmet', 'foie-gras', 'caviar', 'truffle', 'fine-grocery'];
 
 /**
@@ -168,6 +173,7 @@ function suggestCategory(source: LookupSource, product: OpenFactsProduct): Categ
   if (matchesAny(tags, FRUIT_KEYWORDS)) return 'fruits';
   if (matchesAny(tags, VEGETABLE_KEYWORDS)) return 'legumes';
   if (matchesAny(tags, FRESH_KEYWORDS)) return 'produits_frais';
+  if (matchesAny(tags, BEVERAGE_KEYWORDS)) return 'boissons';
   if (matchesAny(tags, SWEET_KEYWORDS)) return 'epicerie_sucree';
   if (matchesAny(tags, SALTY_KEYWORDS)) return 'epicerie_salee';
   if (matchesAny(tags, FINE_KEYWORDS)) return 'epicerie_fine';

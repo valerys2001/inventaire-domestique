@@ -37,7 +37,7 @@ docs/qa-checklist.md    Checklist de recette manuelle.
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | id | nom | marque | categorie | contenance_unitaire | unite | quantite_totale | code_barre | date_maj | utilisateur | cle_fusion | seuil_alerte |
 
-- `categorie` : une des 8 valeurs figées — `epicerie_fine`, `epicerie_salee`, `epicerie_sucree`, `fruits`, `legumes`, `produits_frais`, `cosmetiques_hygiene`, `produits_entretien`.
+- `categorie` : une des 9 valeurs figées — `epicerie_fine`, `epicerie_salee`, `epicerie_sucree`, `fruits`, `legumes`, `produits_frais`, `boissons`, `cosmetiques_hygiene`, `produits_entretien`.
 - `unite` : `unite`, `g`, `l`, `m`, ou `pourcent`.
 - `cle_fusion` : renseignée automatiquement par l'app à chaque écriture — ne pas éditer à la main.
 - `seuil_alerte` : optionnel (laisser vide pour utiliser le seuil par défaut de l'unité).

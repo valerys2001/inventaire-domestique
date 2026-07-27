@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import {
   CATEGORIES,
   CATEGORY_LABELS,
@@ -7,6 +7,7 @@ import {
   computeDeltaFromPack,
   roundForDisplay,
   type Category,
+  type InventoryLine,
   type Unit,
   type CandidateEntry,
 } from '@inventaire/shared';
@@ -41,6 +42,7 @@ const EMPTY_FORM: EntryForm = {
 export function ProductIn() {
   const applyEntry = useInventoryStore((s) => s.applyEntry);
   const undoLastEntry = useInventoryStore((s) => s.undoLastEntry);
+  const lines = useInventoryStore((s) => s.lines);
 
   const [method, setMethod] = useState<'scan' | 'manuel'>('scan');
   const [scanActive, setScanActive] = useState(true);
@@ -48,6 +50,7 @@ export function ProductIn() {
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [form, setForm] = useState<EntryForm | null>(null);
   const [toast, setToast] = useState<{ message: string } | null>(null);
+  const [nameSuggestionsOpen, setNameSuggestionsOpen] = useState(false);
   // Change de clé à chaque tentative -> démontage/remontage complet de <BarcodeScanner>, pour
   // repartir d'un flux caméra garanti neuf si un précédent flux est resté bloqué côté navigateur
   // (observé sur Android : la caméra reste "active" sans qu'aucune image ne s'affiche).
@@ -94,6 +97,29 @@ export function ProductIn() {
 
   const updateForm = (patch: Partial<EntryForm>) => {
     setForm((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
+  // Retaper à la main le nom/marque exacts d'un produit déjà en stock est source d'erreurs
+  // (fautes de frappe -> doublon au lieu d'une fusion). On propose donc les produits existants
+  // qui correspondent à ce qui est tapé, pour préremplir le formulaire en un clic plutôt que
+  // tout retaper.
+  const nameSuggestions = useMemo(() => {
+    const query = form?.nom.trim().toLowerCase() ?? '';
+    if (!query) return [];
+    return lines
+      .filter((line) => line.nom.toLowerCase().includes(query) || line.marque.toLowerCase().includes(query))
+      .slice(0, 6);
+  }, [form?.nom, lines]);
+
+  const pickSuggestion = (line: InventoryLine) => {
+    updateForm({
+      nom: line.nom,
+      marque: line.marque,
+      categorie: line.categorie,
+      contenance_unitaire: String(line.contenance_unitaire),
+      unite: line.unite,
+    });
+    setNameSuggestionsOpen(false);
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -169,9 +195,36 @@ export function ProductIn() {
                 : 'Nouveau produit'}
           </h2>
 
-          <label className="product-in__field">
+          <label className="product-in__field product-in__field--suggest">
             <span>Nom</span>
-            <input type="text" value={form.nom} onChange={(e) => updateForm({ nom: e.target.value })} required />
+            <input
+              type="text"
+              value={form.nom}
+              onChange={(e) => {
+                updateForm({ nom: e.target.value });
+                setNameSuggestionsOpen(true);
+              }}
+              onFocus={() => setNameSuggestionsOpen(true)}
+              onBlur={() => setTimeout(() => setNameSuggestionsOpen(false), 150)}
+              autoComplete="off"
+              required
+            />
+            {nameSuggestionsOpen && nameSuggestions.length > 0 && (
+              <ul className="product-in__suggestions">
+                {nameSuggestions.map((line) => (
+                  <li key={line.id}>
+                    <button type="button" onMouseDown={() => pickSuggestion(line)}>
+                      <strong>{line.nom}</strong>
+                      {line.marque && <span> — {line.marque}</span>}
+                      <span className="product-in__suggestion-meta">
+                        {' '}
+                        ({line.contenance_unitaire} {UNIT_LABELS[line.unite]})
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </label>
 
           <label className="product-in__field">

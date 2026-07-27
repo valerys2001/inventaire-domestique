@@ -3,7 +3,7 @@ import type { Category, InventoryLine, MovementType, PendingOperation } from '@i
 import { resolveMerge, type CandidateEntry, type MergeDecision } from '@inventaire/shared';
 import { getCachedInventory, setCachedInventory } from '../services/localCache';
 import { enqueue, flush, getPendingCount } from '../services/offlineQueue';
-import { fetchInventory } from '../services/sheetsClient';
+import { clearMovements, fetchInventory } from '../services/sheetsClient';
 import { getCachedToken, getConfiguredSpreadsheetId, requestAccessToken } from '../services/googleAuth';
 
 const UTILISATEUR_STORAGE_KEY = 'inventaire.utilisateur';
@@ -98,33 +98,28 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
     set({ syncing: true, syncError: null });
     try {
       const spreadsheetId = getConfiguredSpreadsheetId();
-      // requestAccessToken() ouvre une popup GIS quand aucun jeton n'est en cache ; appelée
-      // hors d'un geste utilisateur direct (ex. au démarrage de l'app), cette popup peut être
-      // bloquée SANS jamais invoquer error_callback (comportement variable selon le navigateur),
-      // ce qui laisserait la promesse — et donc `syncing` — bloqués indéfiniment. On ne l'appelle
-      // donc jamais en mode non-interactif : on se contente du jeton déjà en cache s'il existe.
-      console.info('[sync] début', { interactive, hasSpreadsheetId: Boolean(spreadsheetId) });
       let token = getCachedToken();
-      console.info('[sync] jeton en cache ?', Boolean(token));
       if (!token) {
-        if (!interactive) return;
-        console.info('[sync] demande de jeton (requestAccessToken)…');
-        token = await requestAccessToken();
-        console.info('[sync] jeton obtenu');
+        try {
+          // interactive:false -> prompt:'none' (aucune popup) : réussit silencieusement si une
+          // session Google + un consentement valides existent déjà, échoue silencieusement sinon.
+          token = await requestAccessToken(interactive);
+        } catch (err) {
+          if (interactive) throw err;
+          return; // pas encore connecté / session expirée : normal en synchro automatique
+        }
       }
-      if (!token) return;
 
-      console.info('[sync] flush()…');
       await flush(spreadsheetId, token);
-      console.info('[sync] flush() terminé, fetchInventory()…');
       const serverLines = await fetchInventory(spreadsheetId, token);
-      console.info('[sync] fetchInventory() terminé', serverLines.length, 'lignes');
       await setCachedInventory(serverLines);
       set({ lines: serverLines });
       await get().refreshPendingCount();
-      console.info('[sync] terminé avec succès');
+      // Purge après coup : le journal Mouvements n'est qu'un audit humain jamais relu par la
+      // logique de sync, donc le vider ici n'affecte pas la cohérence — ça évite juste que le
+      // Sheet grossisse indéfiniment. Non bloquant pour le reste de la sync s'il échoue.
+      await clearMovements(spreadsheetId, token).catch(() => {});
     } catch (err) {
-      console.error('[sync] erreur', err);
       set({ syncError: err instanceof Error ? err.message : 'Synchronisation impossible.' });
     } finally {
       set({ syncing: false });
@@ -183,6 +178,9 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
     set({ lastEntry: { candidate, decision } });
     await enqueue(operation);
     await get().refreshPendingCount();
+    // Tentative de sync immédiate, silencieuse (pas de popup) : ne bloque pas la saisie si elle
+    // échoue (hors-ligne, pas encore connecté) - l'opération reste de toute façon dans la file.
+    void get().syncNow();
 
     return decision;
   },
@@ -213,6 +211,7 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
 
     await enqueue(operation);
     await get().refreshPendingCount();
+    void get().syncNow();
   },
 
   setFilterCategory: (filterCategory) => set({ filterCategory }),
@@ -267,5 +266,6 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
       created_at: nowIso,
     });
     await get().refreshPendingCount();
+    void get().syncNow();
   },
 }));

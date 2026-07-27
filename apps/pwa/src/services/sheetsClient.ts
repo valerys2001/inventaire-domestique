@@ -2,6 +2,7 @@ import {
   INVENTAIRE_RANGE,
   MOUVEMENTS_RANGE,
   SHEET_TAB_INVENTAIRE,
+  SHEET_TAB_MOUVEMENTS,
   rowToInventoryLine,
   inventoryLineToRow,
   movementToRow,
@@ -33,7 +34,9 @@ async function sheetsFetch(url: string, token: string, init?: RequestInit, attem
 
   if (response.status === 401 && attempt === 0) {
     invalidateCachedToken();
-    const freshToken = await requestAccessToken();
+    // interactive:false - ce retry peut survenir en pleine synchro automatique en arrière-plan ;
+    // il ne doit jamais surprendre l'utilisateur avec une popup de connexion inattendue.
+    const freshToken = await requestAccessToken(false);
     return sheetsFetch(url, freshToken, init, attempt + 1);
   }
 
@@ -102,4 +105,15 @@ export async function appendMovement(spreadsheetId: string, token: string, movem
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ values: [movementToRow(movement)] }),
   });
+}
+
+/**
+ * Vide les lignes de données de l'onglet Mouvements (garde la ligne d'en-tête). Le journal
+ * n'est qu'un audit humain, jamais relu par la logique de synchronisation (qui relit toujours
+ * `Inventaire` par cle_fusion) : le purger après un flush réussi est donc sans risque pour la
+ * cohérence des données, et évite que le Sheet grossisse indéfiniment.
+ */
+export async function clearMovements(spreadsheetId: string, token: string): Promise<void> {
+  const range = `${SHEET_TAB_MOUVEMENTS}!A2:F`;
+  await sheetsFetch(`${valuesUrl(spreadsheetId, range)}:clear`, token, { method: 'POST' });
 }

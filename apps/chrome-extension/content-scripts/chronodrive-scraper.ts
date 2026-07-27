@@ -75,6 +75,12 @@ function extractQuantityRaw(card: HTMLElement): string | undefined {
   return undefined;
 }
 
+/** URL vérifiée : https://www.chronodrive.com/account/orderdetail/116959903 -> "116959903". */
+function extractOrderId(): string | null {
+  const match = location.pathname.match(/orderdetail\/(\d+)/);
+  return match ? match[1] : null;
+}
+
 function scrapeItems(): ScrapedItem[] {
   const cards = findProductCards();
   const items: ScrapedItem[] = [];
@@ -112,27 +118,40 @@ function injectImportButton(): void {
     fontFamily: 'system-ui, sans-serif',
   });
 
-  button.addEventListener('click', () => {
+  const runImport = (force: boolean) => {
     const items = scrapeItems();
+    const orderId = extractOrderId();
     const previousLabel = button.textContent;
     button.disabled = true;
     button.textContent = items.length > 0 ? `Import de ${items.length} article(s)...` : 'Aucun article détecté';
 
-    chrome.runtime.sendMessage({ type: 'CHRONODRIVE_ITEMS_SCRAPED', items }, (response) => {
+    chrome.runtime.sendMessage({ type: 'CHRONODRIVE_ITEMS_SCRAPED', items, orderId, force }, (response) => {
       button.disabled = false;
+
       if (chrome.runtime.lastError) {
         button.textContent = 'Erreur import (voir popup)';
         console.error('[Inventaire] sendMessage failed', chrome.runtime.lastError);
-      } else {
-        button.textContent = response?.ok
-          ? `${response.count ?? items.length} article(s) importé(s)`
-          : "Échec de l'import (voir popup)";
+        setTimeout(() => (button.textContent = previousLabel), 4000);
+        return;
       }
-      setTimeout(() => {
+
+      if (response?.alreadyImported) {
         button.textContent = previousLabel;
-      }, 4000);
+        const confirmed = confirm(
+          'Cette commande Chronodrive semble déjà avoir été importée précédemment. Réimporter quand même ?',
+        );
+        if (confirmed) runImport(true);
+        return;
+      }
+
+      button.textContent = response?.ok
+        ? `${response.count ?? items.length} article(s) importé(s)`
+        : "Échec de l'import (voir popup)";
+      setTimeout(() => (button.textContent = previousLabel), 4000);
     });
-  });
+  };
+
+  button.addEventListener('click', () => runImport(false));
 
   document.body.appendChild(button);
 }

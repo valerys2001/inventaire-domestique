@@ -219,8 +219,36 @@ async function importItems(spreadsheetId: string, items: ScrapedItem[], token: s
   return processed;
 }
 
-async function handleScrapedItems(items: ScrapedItem[]): Promise<number> {
-  if (!Array.isArray(items) || items.length === 0) return 0;
+// Nombre de commandes récentes mémorisées pour la détection de doublon (évite une croissance
+// illimitée de chrome.storage.local ; largement suffisant pour repérer un double-clic accidentel
+// ou une réimportation du même jour/semaine).
+const IMPORTED_ORDERS_STORAGE_KEY = 'importedOrderIds';
+const MAX_REMEMBERED_ORDERS = 200;
+
+async function isOrderAlreadyImported(orderId: string): Promise<boolean> {
+  const { [IMPORTED_ORDERS_STORAGE_KEY]: ids } = await chrome.storage.local.get(IMPORTED_ORDERS_STORAGE_KEY);
+  return Array.isArray(ids) && ids.includes(orderId);
+}
+
+async function rememberImportedOrder(orderId: string): Promise<void> {
+  const { [IMPORTED_ORDERS_STORAGE_KEY]: ids } = await chrome.storage.local.get(IMPORTED_ORDERS_STORAGE_KEY);
+  const existing: string[] = Array.isArray(ids) ? ids : [];
+  const updated = [...existing.filter((id) => id !== orderId), orderId].slice(-MAX_REMEMBERED_ORDERS);
+  await chrome.storage.local.set({ [IMPORTED_ORDERS_STORAGE_KEY]: updated });
+}
+
+type HandleScrapedItemsResult = { alreadyImported: true } | { alreadyImported: false; count: number };
+
+async function handleScrapedItems(
+  items: ScrapedItem[],
+  orderId: string | null,
+  force: boolean,
+): Promise<HandleScrapedItemsResult> {
+  if (orderId && !force && (await isOrderAlreadyImported(orderId))) {
+    return { alreadyImported: true };
+  }
+
+  if (!Array.isArray(items) || items.length === 0) return { alreadyImported: false, count: 0 };
 
   const { spreadsheetId } = await chrome.storage.sync.get('spreadsheetId');
   if (!spreadsheetId || typeof spreadsheetId !== 'string') {
@@ -235,8 +263,9 @@ async function handleScrapedItems(items: ScrapedItem[]): Promise<number> {
     lastImportCount: count,
     lastImportDate: new Date().toISOString(),
   });
+  if (orderId) await rememberImportedOrder(orderId);
 
-  return count;
+  return { alreadyImported: false, count };
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -244,8 +273,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return undefined;
   }
 
-  handleScrapedItems(message.items as ScrapedItem[])
-    .then((count) => sendResponse({ ok: true, count }))
+  const orderId = typeof message.orderId === 'string' ? message.orderId : null;
+  const force = Boolean(message.force);
+
+  handleScrapedItems(message.items as ScrapedItem[], orderId, force)
+    .then((result) =>
+      sendResponse(result.alreadyImported ? { ok: true, alreadyImported: true } : { ok: true, count: result.count }),
+    )
     .catch((err) => {
       console.error('[Inventaire][background] import Chronodrive échoué', err);
       sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });

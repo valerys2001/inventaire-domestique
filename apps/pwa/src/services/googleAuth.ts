@@ -128,8 +128,19 @@ export function initGoogleAuth(clientId: string): Promise<void> {
 // (popup fermée manuellement sans action, écran d'erreur Google non reconnu comme tel, etc.),
 // on ne reste pas bloqué indéfiniment et on ne gèle pas silencieusement l'appelant (ex: syncNow).
 const ACCESS_TOKEN_TIMEOUT_MS = 20_000;
+// Le mode silencieux (prompt:'none') n'affiche jamais d'UI : soit Google répond vite (session +
+// consentement déjà valides), soit il échoue vite. Pas besoin d'attendre aussi longtemps qu'un
+// flux interactif où l'utilisateur doit choisir un compte / lire un écran de consentement.
+const SILENT_ACCESS_TOKEN_TIMEOUT_MS = 8_000;
 
-export function requestAccessToken(): Promise<string> {
+/**
+ * `interactive: true` (par défaut) autorise Google à afficher une popup (choix de compte,
+ * consentement) si nécessaire. `interactive: false` force `prompt: 'none'` : aucune UI ne
+ * s'affiche jamais, la demande échoue silencieusement si une réautorisation serait nécessaire.
+ * Utilisé pour la synchronisation automatique (au chargement, après chaque saisie) sans jamais
+ * interrompre l'utilisateur avec une popup inattendue.
+ */
+export function requestAccessToken(interactive = true): Promise<string> {
   if (cachedToken && Date.now() < tokenExpiresAt) {
     return Promise.resolve(cachedToken);
   }
@@ -145,14 +156,24 @@ export function requestAccessToken(): Promise<string> {
     // honore réellement pour cet appel précis) mais settlePendingToken/rejectPendingToken sont
     // idempotents : peu importe lequel des deux jeux de callbacks Google invoque en pratique.
     tokenClient!.requestAccessToken({
+      prompt: interactive ? '' : 'none',
       callback: settlePendingToken,
       error_callback: (error) => rejectPendingToken(new Error(error.message ?? error.type)),
     });
   });
 
-  setTimeout(() => {
-    rejectPendingToken(new Error('Délai dépassé en attendant la réponse de Google (popup fermée sans réponse ?).'));
-  }, ACCESS_TOKEN_TIMEOUT_MS);
+  setTimeout(
+    () => {
+      rejectPendingToken(
+        new Error(
+          interactive
+            ? 'Délai dépassé en attendant la réponse de Google (popup fermée sans réponse ?).'
+            : 'Session Google silencieuse indisponible (reconnexion manuelle nécessaire).',
+        ),
+      );
+    },
+    interactive ? ACCESS_TOKEN_TIMEOUT_MS : SILENT_ACCESS_TOKEN_TIMEOUT_MS,
+  );
 
   return tokenPromise;
 }
