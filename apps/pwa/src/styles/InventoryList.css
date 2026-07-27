@@ -84,3 +84,16 @@
   text-align: center;
   color: var(--color-text-muted);
 }
+
+.inventory-list__toggle-zero {
+  align-self: flex-start;
+  min-height: 36px;
+  padding: var(--spacing-xs) var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}

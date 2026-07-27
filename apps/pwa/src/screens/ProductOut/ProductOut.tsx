@@ -14,6 +14,7 @@ interface ProductOutProps {
 export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
   const lines = useInventoryStore((s) => s.lines);
   const applyExit = useInventoryStore((s) => s.applyExit);
+  const updateThreshold = useInventoryStore((s) => s.updateThreshold);
   const utilisateur = useInventoryStore((s) => s.utilisateur);
 
   const [method, setMethod] = useState<'liste' | 'scan'>('liste');
@@ -22,6 +23,8 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
   const [scanBusy, setScanBusy] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<string | null>(null);
+  const [thresholdInput, setThresholdInput] = useState('');
+  const [thresholdSaved, setThresholdSaved] = useState(false);
 
   useEffect(() => {
     if (initialCleFusion) {
@@ -38,8 +41,20 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
   useEffect(() => {
     if (selectedLine) {
       setAmount(selectedLine.unite === 'unite' ? Math.min(1, selectedLine.quantite_totale) : selectedLine.contenance_unitaire || 0);
+      setThresholdInput(selectedLine.seuil_alerte !== null ? String(selectedLine.seuil_alerte) : '');
+      setThresholdSaved(false);
     }
   }, [selectedLine?.id]);
+
+  const handleSaveThreshold = async () => {
+    if (!selectedLine) return;
+    const trimmed = thresholdInput.trim();
+    const value = trimmed === '' ? null : Number(trimmed);
+    if (value !== null && !(value >= 0)) return;
+    await updateThreshold(selectedLine.cle_fusion, value);
+    setThresholdSaved(true);
+    setTimeout(() => setThresholdSaved(false), 2000);
+  };
 
   const clearSelection = () => {
     setSelectedCleFusion(null);
@@ -155,6 +170,23 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
           <button type="button" className="product-out__cancel" onClick={clearSelection}>
             Choisir un autre produit
           </button>
+
+          <div className="product-out__threshold">
+            <label className="product-out__field">
+              <span>Seuil "Besoins" ({UNIT_LABELS[selectedLine.unite]}) — vide = non suivi</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={thresholdInput}
+                onChange={(e) => setThresholdInput(e.target.value)}
+                placeholder="ex: 2"
+              />
+            </label>
+            <button type="button" className="product-out__cancel" onClick={handleSaveThreshold}>
+              {thresholdSaved ? 'Enregistré ✓' : 'Enregistrer le seuil'}
+            </button>
+          </div>
         </div>
       )}
 

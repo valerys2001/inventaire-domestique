@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { CATEGORY_LABELS, DEFAULT_LOW_STOCK_THRESHOLD, UNIT_LABELS, type InventoryLine } from '@inventaire/shared';
 import { CategoryFilter } from '../../components/CategoryFilter/CategoryFilter';
 import { useInventoryStore } from '../../store/inventoryStore';
@@ -20,14 +20,24 @@ export function InventoryList({ onSelectLine }: InventoryListProps) {
   const pendingCount = useInventoryStore((s) => s.pendingCount);
   const syncNow = useInventoryStore((s) => s.syncNow);
   const syncing = useInventoryStore((s) => s.syncing);
+  // Un article à 0 (épuisé, ou fruit/légume pré-créé jamais encore acheté) noierait la liste s'il
+  // restait affiché en permanence : masqué par défaut, avec une reprise possible en un clic.
+  const [showZero, setShowZero] = useState(false);
+
+  const categoryLines = useMemo(
+    () => (filterCategory === 'toutes' ? lines : lines.filter((l) => l.categorie === filterCategory)),
+    [lines, filterCategory],
+  );
+
+  const zeroCount = useMemo(() => categoryLines.filter((l) => l.quantite_totale === 0).length, [categoryLines]);
 
   const visibleLines = useMemo(() => {
-    const filtered = filterCategory === 'toutes' ? lines : lines.filter((l) => l.categorie === filterCategory);
+    const filtered = showZero ? categoryLines : categoryLines.filter((l) => l.quantite_totale > 0);
     return [...filtered].sort((a, b) => {
       if (a.categorie !== b.categorie) return a.categorie.localeCompare(b.categorie);
       return a.nom.localeCompare(b.nom);
     });
-  }, [lines, filterCategory]);
+  }, [categoryLines, showZero]);
 
   return (
     <div className="inventory-list">
@@ -50,6 +60,12 @@ export function InventoryList({ onSelectLine }: InventoryListProps) {
       </header>
 
       <CategoryFilter value={filterCategory} onChange={setFilterCategory} />
+
+      {zeroCount > 0 && (
+        <button type="button" className="inventory-list__toggle-zero" onClick={() => setShowZero((v) => !v)}>
+          {showZero ? 'Masquer les articles épuisés' : `Afficher les articles épuisés (${zeroCount})`}
+        </button>
+      )}
 
       <ul className="inventory-list__items">
         {visibleLines.map((line) => {

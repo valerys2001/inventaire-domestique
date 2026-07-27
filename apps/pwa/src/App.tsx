@@ -1,20 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { InventoryList } from './screens/InventoryList/InventoryList';
 import { ProductIn } from './screens/ProductIn/ProductIn';
 import { ProductOut } from './screens/ProductOut/ProductOut';
+import { Besoins } from './screens/Besoins/Besoins';
 import { Settings } from './screens/Settings/Settings';
 import { TabBar } from './components/TabBar/TabBar';
 import { useInventoryStore } from './store/inventoryStore';
 import { initGoogleAuth, getConfiguredClientId } from './services/googleAuth';
 import './styles/App.css';
 
-export type Screen = 'inventaire' | 'entree' | 'sortie' | 'reglages';
+export type Screen = 'inventaire' | 'entree' | 'sortie' | 'besoins' | 'reglages';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('inventaire');
   const [sortieTarget, setSortieTarget] = useState<string | null>(null);
   const loadFromCache = useInventoryStore((s) => s.loadFromCache);
   const syncNow = useInventoryStore((s) => s.syncNow);
+  const lines = useInventoryStore((s) => s.lines);
+
+  const besoinsCount = useMemo(
+    () => lines.filter((line) => line.seuil_alerte !== null && line.quantite_totale <= line.seuil_alerte).length,
+    [lines],
+  );
 
   useEffect(() => {
     // Le cache local (IndexedDB) s'affiche immédiatement ; la sync réseau qui suit est
@@ -45,9 +52,10 @@ export default function App() {
         {screen === 'sortie' && (
           <ProductOut initialCleFusion={sortieTarget} onConsumed={() => setSortieTarget(null)} />
         )}
+        {screen === 'besoins' && <Besoins />}
         {screen === 'reglages' && <Settings />}
       </main>
-      <TabBar active={screen} onChange={setScreen} />
+      <TabBar active={screen} onChange={setScreen} besoinsCount={besoinsCount} />
     </div>
   );
 }

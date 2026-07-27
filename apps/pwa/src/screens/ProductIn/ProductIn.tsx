@@ -45,6 +45,11 @@ export function ProductIn() {
   const lines = useInventoryStore((s) => s.lines);
 
   const [method, setMethod] = useState<'scan' | 'manuel'>('scan');
+  // La saisie manuelle démarre toujours par le choix "produit existant vs nouveau" : retaper un
+  // nom/marque à la main est source de doublons (faute de frappe -> nouvelle ligne au lieu d'une
+  // fusion), donc choisir dans la liste existante est le chemin par défaut, pas une option cachée.
+  const [manuelStep, setManuelStep] = useState<'choose' | 'form'>('choose');
+  const [chooserQuery, setChooserQuery] = useState('');
   const [scanActive, setScanActive] = useState(true);
   const [lookupBusy, setLookupBusy] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -67,8 +72,24 @@ export function ProductIn() {
   const startManuel = () => {
     setMethod('manuel');
     setScanActive(false);
-    setForm({ ...EMPTY_FORM });
+    setForm(null);
+    setManuelStep('choose');
+    setChooserQuery('');
   };
+
+  const startBlankForm = () => {
+    setForm({ ...EMPTY_FORM });
+    setManuelStep('form');
+  };
+
+  const chooserResults = useMemo(() => {
+    const query = chooserQuery.trim().toLowerCase();
+    const sorted = [...lines].sort((a, b) => a.nom.localeCompare(b.nom));
+    const filtered = query
+      ? sorted.filter((line) => line.nom.toLowerCase().includes(query) || line.marque.toLowerCase().includes(query))
+      : sorted;
+    return filtered.slice(0, 30);
+  }, [chooserQuery, lines]);
 
   const handleDetected = async (barcode: string) => {
     setScanActive(false);
@@ -122,6 +143,20 @@ export function ProductIn() {
     setNameSuggestionsOpen(false);
   };
 
+  const chooseExisting = (line: InventoryLine) => {
+    setForm({
+      nom: line.nom,
+      marque: line.marque,
+      categorie: line.categorie,
+      contenance_unitaire: String(line.contenance_unitaire),
+      unite: line.unite,
+      nombre_contenants: '1',
+      code_barre: line.code_barre ?? '',
+      isKnownProduct: true,
+    });
+    setManuelStep('form');
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!form) return;
@@ -145,7 +180,12 @@ export function ProductIn() {
       const label = [decision.target.nom, decision.target.marque].filter(Boolean).join(' ');
       setToast({ message: `+${roundForDisplay(delta)} ${UNIT_LABELS[form.unite]} ajoutés à ${label}` });
     }
-    startScan();
+    // Retourne à la méthode d'origine : liste de choix pour la saisie manuelle, scanner sinon.
+    if (method === 'manuel') {
+      startManuel();
+    } else {
+      startScan();
+    }
   };
 
   return (
@@ -182,6 +222,44 @@ export function ProductIn() {
           <button type="button" className="product-in__retry" onClick={() => setScannerKey((k) => k + 1)}>
             Réessayer la caméra
           </button>
+        </div>
+      )}
+
+      {method === 'manuel' && manuelStep === 'choose' && !form && (
+        <div className="product-in__chooser">
+          <label className="product-in__field">
+            <span>Chercher un produit déjà en stock</span>
+            <input
+              type="text"
+              value={chooserQuery}
+              onChange={(e) => setChooserQuery(e.target.value)}
+              placeholder="Nom ou marque…"
+              autoFocus
+            />
+          </label>
+
+          <button type="button" className="product-in__submit" onClick={startBlankForm}>
+            + Nouveau produit
+          </button>
+
+          <ul className="product-in__chooser-list">
+            {chooserResults.map((line) => (
+              <li key={line.id}>
+                <button type="button" className="product-in__chooser-item" onClick={() => chooseExisting(line)}>
+                  <span className="product-in__chooser-item-main">
+                    <strong>{line.nom}</strong>
+                    {line.marque && <span> — {line.marque}</span>}
+                  </span>
+                  <span className="product-in__suggestion-meta">
+                    {CATEGORY_LABELS[line.categorie]} · {line.contenance_unitaire} {UNIT_LABELS[line.unite]}
+                  </span>
+                </button>
+              </li>
+            ))}
+            {chooserResults.length === 0 && (
+              <li className="product-in__chooser-empty">Aucun produit existant ne correspond.</li>
+            )}
+          </ul>
         </div>
       )}
 
@@ -286,7 +364,11 @@ export function ProductIn() {
           <button type="submit" className="product-in__submit">
             Ajouter au stock
           </button>
-          <button type="button" className="product-in__cancel" onClick={startScan}>
+          <button
+            type="button"
+            className="product-in__cancel"
+            onClick={() => (method === 'manuel' ? startManuel() : startScan())}
+          >
             Annuler
           </button>
         </form>

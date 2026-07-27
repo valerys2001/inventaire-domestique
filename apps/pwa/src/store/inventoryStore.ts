@@ -71,6 +71,13 @@ interface InventoryStoreState {
   setUtilisateur: (utilisateur: string) => void;
   /** Convertit la dernière fusion silencieuse en ligne distincte (action "Annuler / séparer"). */
   undoLastEntry: () => Promise<void>;
+  /**
+   * Règle (ou retire, avec `null`) le seuil "Besoins" d'un produit. Réutilise `seuil_alerte` :
+   * une ligne avec un seuil explicite est celle que l'utilisateur a choisi de suivre dans
+   * l'onglet Besoins, pas seulement le seuil générique par défaut (qui s'applique à tout le
+   * monde sans opt-in). Delta 0 : ceci ne change jamais la quantité.
+   */
+  updateThreshold: (cle_fusion: string, seuilAlerte: number | null) => Promise<void>;
 }
 
 export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
@@ -262,6 +269,29 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
       line_snapshot: toLineSnapshot(revertedLine, utilisateur),
       delta: -candidate.delta,
       type: 'sortie',
+      utilisateur,
+      created_at: nowIso,
+    });
+    await get().refreshPendingCount();
+    void get().syncNow();
+  },
+
+  updateThreshold: async (cle_fusion, seuilAlerte) => {
+    const state = get();
+    const target = state.lines.find((line) => line.cle_fusion === cle_fusion);
+    if (!target) return;
+
+    const nowIso = new Date().toISOString();
+    const utilisateur = state.utilisateur || 'local';
+    const updatedLine: InventoryLine = { ...target, seuil_alerte: seuilAlerte, date_maj: nowIso, utilisateur };
+    set({ lines: state.lines.map((line) => (line.id === target.id ? updatedLine : line)) });
+
+    await enqueue({
+      local_id: crypto.randomUUID(),
+      cle_fusion,
+      line_snapshot: toLineSnapshot(updatedLine, utilisateur),
+      delta: 0,
+      type: 'entree_manuelle',
       utilisateur,
       created_at: nowIso,
     });

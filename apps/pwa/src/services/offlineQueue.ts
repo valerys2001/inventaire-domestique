@@ -22,8 +22,12 @@ async function applyOptimistic(op: PendingOperation): Promise<void> {
   const now = new Date().toISOString();
 
   if (existing) {
+    // Les champs non quantitatifs (nom, marque, categorie, seuil_alerte...) suivent la règle
+    // "dernier écrivain gagne" documentée dans le plan de synchronisation : on applique l'état
+    // capturé dans line_snapshot au moment de la saisie, pas seulement la quantité.
     const updated: InventoryLine = {
       ...existing,
+      ...op.line_snapshot,
       quantite_totale: existing.quantite_totale + op.delta,
       date_maj: now,
     };
@@ -58,8 +62,10 @@ async function flushOne(spreadsheetId: string, token: string, op: PendingOperati
   const serverLine = serverLines.find((line) => line.cle_fusion === op.cle_fusion);
   const now = new Date().toISOString();
 
+  // Même règle "dernier écrivain gagne" côté serveur que côté cache local (cf. applyOptimistic) :
+  // seule quantite_totale reste purement additive, le reste suit line_snapshot.
   const updatedLine: InventoryLine = serverLine
-    ? { ...serverLine, quantite_totale: serverLine.quantite_totale + op.delta, date_maj: now }
+    ? { ...serverLine, ...op.line_snapshot, quantite_totale: serverLine.quantite_totale + op.delta, date_maj: now }
     : { ...op.line_snapshot, id: op.local_id, quantite_totale: op.delta, date_maj: now };
 
   await upsertInventoryLine(spreadsheetId, token, updatedLine);
