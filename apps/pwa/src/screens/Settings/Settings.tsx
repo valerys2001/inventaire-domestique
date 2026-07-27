@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
-import { buildMergeKey } from '@inventaire/shared';
-import { getCachedToken, signOut } from '../../services/googleAuth';
 import { useInventoryStore } from '../../store/inventoryStore';
-import { PRODUCE_SEED } from '../../data/produceSeed';
 import '../../styles/Settings.css';
 
 const SPREADSHEET_ID_STORAGE_KEY = 'inventaire.spreadsheetId';
@@ -14,12 +11,9 @@ export function Settings() {
   const syncNow = useInventoryStore((s) => s.syncNow);
   const syncing = useInventoryStore((s) => s.syncing);
   const syncError = useInventoryStore((s) => s.syncError);
-  const applyEntry = useInventoryStore((s) => s.applyEntry);
-  const lines = useInventoryStore((s) => s.lines);
+  const signOutGoogle = useInventoryStore((s) => s.signOutGoogle);
+  const seedProduce = useInventoryStore((s) => s.seedProduce);
 
-  const [connected, setConnected] = useState(() => Boolean(getCachedToken()));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [spreadsheetId, setSpreadsheetId] = useState('');
   const [seeding, setSeeding] = useState(false);
   const [seedResult, setSeedResult] = useState<string | null>(null);
@@ -29,65 +23,18 @@ export function Settings() {
     if (stored) setSpreadsheetId(stored);
   }, []);
 
-  const handleConnect = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      // interactive: true -> requestAccessToken() peut ouvrir le popup de consentement,
-      // légitime ici car déclenché par un clic direct de l'utilisateur.
-      await syncNow({ interactive: true });
-      setConnected(Boolean(getCachedToken()));
-    } catch (err) {
-      setError('Échec de la connexion à Google. Réessayez.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    setBusy(true);
-    try {
-      await signOut();
-      setConnected(false);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const handleSpreadsheetIdChange = (value: string) => {
     setSpreadsheetId(value);
     localStorage.setItem(SPREADSHEET_ID_STORAGE_KEY, value);
   };
 
-  // Les fruits/légumes n'ont généralement pas de code-barre unitaire exploitable (vente en
-  // vrac/au poids) : les pré-créer à quantité 0 permet de les incrémenter depuis le sélecteur
-  // de produits existants plutôt que de les recréer à la main à chaque fois. delta:0 sur une
-  // ligne inexistante crée une ligne à quantite_totale=0 ; sur une ligne déjà présente, ne
-  // change rien (no-op) - filtré en amont par clé de fusion pour éviter le bruit inutile.
   const handleSeedProduce = async () => {
     setSeeding(true);
     setSeedResult(null);
     try {
-      const existingKeys = new Set(lines.map((l) => l.cle_fusion));
-      const toCreate = PRODUCE_SEED.filter(
-        (item) => !existingKeys.has(buildMergeKey(item.nom, '', 1, 'unite')),
-      );
-      for (const item of toCreate) {
-        await applyEntry({
-          nom: item.nom,
-          marque: '',
-          categorie: item.categorie,
-          contenance_unitaire: 1,
-          unite: 'unite',
-          delta: 0,
-          code_barre: null,
-        });
-      }
-      await syncNow({ interactive: true });
+      const count = await seedProduce();
       setSeedResult(
-        toCreate.length > 0
-          ? `${toCreate.length} produit(s) ajouté(s) à zéro.`
-          : 'Tous les fruits/légumes courants sont déjà dans l\'inventaire.',
+        count > 0 ? `${count} produit(s) ajouté(s) à zéro.` : "Tous les fruits/légumes courants sont déjà dans l'inventaire.",
       );
     } finally {
       setSeeding(false);
@@ -100,16 +47,10 @@ export function Settings() {
 
       <section className="settings__section">
         <h2>Compte Google</h2>
-        {connected ? (
-          <button type="button" className="settings__button" onClick={handleDisconnect} disabled={busy}>
-            Se déconnecter
-          </button>
-        ) : (
-          <button type="button" className="settings__button" onClick={handleConnect} disabled={busy}>
-            Se connecter à Google
-          </button>
-        )}
-        {error && <p className="settings__error">{error}</p>}
+        <p className="settings__pending">Connecté.</p>
+        <button type="button" className="settings__button" onClick={signOutGoogle}>
+          Se déconnecter
+        </button>
       </section>
 
       <section className="settings__section">
@@ -142,7 +83,8 @@ export function Settings() {
         <h2>Catalogue</h2>
         <p className="settings__hint">
           Ajoute les fruits et légumes courants à l'inventaire avec une quantité de 0 (utile car ils
-          n'ont généralement pas de code-barre à scanner).
+          n'ont généralement pas de code-barre à scanner). Fait automatiquement au premier lancement,
+          ce bouton sert à relancer l'ajout si besoin.
         </p>
         <button type="button" className="settings__button" onClick={handleSeedProduce} disabled={seeding}>
           {seeding ? 'Ajout en cours…' : 'Pré-remplir fruits & légumes'}

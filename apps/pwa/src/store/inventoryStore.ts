@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import type { Category, InventoryLine, MovementType, PendingOperation } from '@inventaire/shared';
-import { resolveMerge, type CandidateEntry, type MergeDecision } from '@inventaire/shared';
+import { buildMergeKey, resolveMerge, type CandidateEntry, type MergeDecision } from '@inventaire/shared';
 import { getCachedInventory, setCachedInventory } from '../services/localCache';
 import { enqueue, flush, getPendingCount } from '../services/offlineQueue';
 import { clearMovements, fetchInventory } from '../services/sheetsClient';
-import { getCachedToken, getConfiguredSpreadsheetId, requestAccessToken } from '../services/googleAuth';
+import { getCachedToken, getConfiguredSpreadsheetId, requestAccessToken, signOut } from '../services/googleAuth';
+import { PRODUCE_SEED } from '../data/produceSeed';
 
 const UTILISATEUR_STORAGE_KEY = 'inventaire.utilisateur';
 
@@ -78,6 +79,12 @@ interface InventoryStoreState {
    * monde sans opt-in). Delta 0 : ceci ne change jamais la quantité.
    */
   updateThreshold: (cle_fusion: string, seuilAlerte: number | null) => Promise<void>;
+  /** true dès qu'un jeton Google valide a été obtenu (silencieusement ou via un clic) — sert de
+   * porte d'entrée à l'app : tant que false, l'UI n'affiche qu'un écran de connexion. */
+  connected: boolean;
+  signOutGoogle: () => void;
+  /** Crée les fruits/légumes courants manquants à quantité 0. Retourne le nombre ajouté. */
+  seedProduce: () => Promise<number>;
 }
 
 export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
@@ -88,6 +95,7 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
   lastEntry: null,
   syncing: false,
   syncError: null,
+  connected: false,
 
   loadFromCache: async () => {
     const lines = await getCachedInventory();
@@ -117,6 +125,7 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
         }
       }
 
+      set({ connected: true });
       await flush(spreadsheetId, token);
       const serverLines = await fetchInventory(spreadsheetId, token);
       await setCachedInventory(serverLines);
@@ -297,5 +306,31 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
     });
     await get().refreshPendingCount();
     void get().syncNow();
+  },
+
+  signOutGoogle: () => {
+    signOut();
+    set({ connected: false });
+  },
+
+  seedProduce: async () => {
+    const existingKeys = new Set(get().lines.map((l) => l.cle_fusion));
+    const toCreate = PRODUCE_SEED.filter((item) => !existingKeys.has(buildMergeKey(item.nom, '', 1, 'unite')));
+    for (const item of toCreate) {
+      await get().applyEntry({
+        nom: item.nom,
+        marque: '',
+        categorie: item.categorie,
+        contenance_unitaire: 1,
+        unite: 'unite',
+        delta: 0,
+        code_barre: null,
+      });
+    }
+    // Pas de mode interactif ici : seedProduce() peut être déclenché automatiquement au chargement
+    // de l'app (hors geste utilisateur direct), donc jamais de popup — un jeton est déjà en cache
+    // à ce stade de toute façon (l'app n'affiche son contenu qu'une fois connectée).
+    if (toCreate.length > 0) void get().syncNow();
+    return toCreate.length;
   },
 }));
