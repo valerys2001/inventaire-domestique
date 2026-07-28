@@ -14,6 +14,13 @@ export interface InventoryLine {
   utilisateur: string;
   cle_fusion: string;
   seuil_alerte: number | null;
+  /**
+   * Quantité cible du mode "Construction de liste", partagée entre appareils/utilisateurs comme
+   * le reste de la ligne. `null` = pas de brouillon en cours pour ce produit. Distincte de
+   * quantite_totale : modifier la cible ne change jamais le stock réel, seulement l'écart calculé
+   * au moment de "Générer la liste" (cible - quantite_totale, si positif).
+   */
+  quantite_cible: number | null;
 }
 
 /** Ligne append-only de l'onglet `Mouvements` (journal / audit). */
@@ -54,6 +61,16 @@ export interface ProductLookupResult {
    * que l'UI puisse pré-remplir directement le delta de mouvement d'un pack.
    */
   delta_pack?: number;
+}
+
+/** Une ligne de l'onglet `ListeCourses` (liste de courses générée, partagée et éditable). */
+export interface ListeCoursesItem {
+  id: string;
+  nom: string;
+  marque: string;
+  categorie: Category;
+  quantite: number;
+  unite: Unit;
 }
 
 /** Une opération en attente dans la file de synchronisation offline. */

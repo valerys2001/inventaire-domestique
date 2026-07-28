@@ -1,9 +1,16 @@
 import { create } from 'zustand';
-import type { Category, InventoryLine, MovementType, PendingOperation } from '@inventaire/shared';
-import { resolveMerge, type CandidateEntry, type MergeDecision } from '@inventaire/shared';
-import { getCachedInventory, setCachedInventory } from '../services/localCache';
+import type { Category, InventoryLine, ListeCoursesItem, MovementType, PendingOperation } from '@inventaire/shared';
+import { buildListeCoursesKey, resolveMerge, type CandidateEntry, type MergeDecision } from '@inventaire/shared';
+import { getCachedInventory, getCachedListeCourses, setCachedInventory, setCachedListeCourses } from '../services/localCache';
 import { enqueue, flush, getPendingCount } from '../services/offlineQueue';
-import { clearMovements, fetchInventory } from '../services/sheetsClient';
+import {
+  clearListeCourses,
+  clearMovements,
+  fetchInventory,
+  fetchListeCourses,
+  upsertInventoryLine,
+  upsertListeCoursesItem,
+} from '../services/sheetsClient';
 import { getCachedToken, getConfiguredSpreadsheetId, requestAccessToken, signOut } from '../services/googleAuth';
 
 const UTILISATEUR_STORAGE_KEY = 'inventaire.utilisateur';
@@ -34,6 +41,7 @@ function toLineSnapshot(line: InventoryLine, utilisateur: string): PendingOperat
     utilisateur,
     cle_fusion: line.cle_fusion,
     seuil_alerte: line.seuil_alerte,
+    quantite_cible: line.quantite_cible,
   };
 }
 
@@ -82,6 +90,30 @@ interface InventoryStoreState {
    * porte d'entrée à l'app : tant que false, l'UI n'affiche qu'un écran de connexion. */
   connected: boolean;
   signOutGoogle: () => void;
+
+  /** Liste de courses générée, partagée (onglet ListeCourses). */
+  listeCourses: ListeCoursesItem[];
+  listeCoursesLoading: boolean;
+  listeCoursesError: string | null;
+  loadListeCourses: () => Promise<void>;
+  /**
+   * Règle la quantité cible du mode "Construction de liste" pour un produit (partagée entre
+   * appareils, comme seuil_alerte). Ne modifie jamais quantite_totale : c'est un brouillon, pas
+   * un mouvement de stock.
+   */
+  updateTargetQuantity: (cle_fusion: string, quantiteCible: number | null) => Promise<void>;
+  /**
+   * Calcule l'écart (cible - actuel) pour chaque produit dont la cible dépasse le stock actuel,
+   * l'envoie dans l'onglet ListeCourses (fusionné avec la liste déjà existante par produit+marque+
+   * unité), puis remet à null la cible de ces lignes dans l'Inventaire - le brouillon est
+   * "résolu" une fois transformé en liste.
+   */
+  generateShoppingList: () => Promise<void>;
+  /** Modifie la quantité d'un article déjà généré ; 0 le retire de l'affichage (pas de suppression
+   * de ligne, plus simple qu'une suppression de ligne Sheets et suffisant côté UI). */
+  updateShoppingListItem: (id: string, quantite: number) => Promise<void>;
+  /** Vide entièrement la liste de courses générée. */
+  deleteShoppingList: () => Promise<void>;
 }
 
 export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
@@ -93,10 +125,13 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
   syncing: false,
   syncError: null,
   connected: false,
+  listeCourses: [],
+  listeCoursesLoading: false,
+  listeCoursesError: null,
 
   loadFromCache: async () => {
-    const lines = await getCachedInventory();
-    set({ lines });
+    const [lines, listeCourses] = await Promise.all([getCachedInventory(), getCachedListeCourses()]);
+    set({ lines, listeCourses });
     await get().refreshPendingCount();
   },
 
@@ -124,9 +159,12 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
 
       set({ connected: true });
       await flush(spreadsheetId, token);
-      const serverLines = await fetchInventory(spreadsheetId, token);
-      await setCachedInventory(serverLines);
-      set({ lines: serverLines });
+      const [serverLines, serverListeCourses] = await Promise.all([
+        fetchInventory(spreadsheetId, token),
+        fetchListeCourses(spreadsheetId, token),
+      ]);
+      await Promise.all([setCachedInventory(serverLines), setCachedListeCourses(serverListeCourses)]);
+      set({ lines: serverLines, listeCourses: serverListeCourses });
       await get().refreshPendingCount();
       // Purge après coup : le journal Mouvements n'est qu'un audit humain jamais relu par la
       // logique de sync, donc le vider ici n'affecte pas la cohérence — ça évite juste que le
@@ -173,6 +211,7 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
         utilisateur,
         cle_fusion: decision.cle_fusion,
         seuil_alerte: null,
+        quantite_cible: null,
       };
       set({ lines: [...state.lines, newLine] });
       lineSnapshot = toLineSnapshot(newLine, utilisateur);
@@ -308,5 +347,128 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
   signOutGoogle: () => {
     signOut();
     set({ connected: false });
+  },
+
+  loadListeCourses: async () => {
+    await get().syncNow({ interactive: true });
+  },
+
+  updateTargetQuantity: async (cle_fusion, quantiteCible) => {
+    const state = get();
+    const target = state.lines.find((line) => line.cle_fusion === cle_fusion);
+    if (!target) return;
+
+    const nowIso = new Date().toISOString();
+    const utilisateur = state.utilisateur || 'local';
+    const updatedLine: InventoryLine = { ...target, quantite_cible: quantiteCible, date_maj: nowIso, utilisateur };
+    set({ lines: state.lines.map((line) => (line.id === target.id ? updatedLine : line)) });
+
+    await enqueue({
+      local_id: crypto.randomUUID(),
+      cle_fusion,
+      line_snapshot: toLineSnapshot(updatedLine, utilisateur),
+      delta: 0,
+      type: 'entree_manuelle',
+      utilisateur,
+      created_at: nowIso,
+    });
+    await get().refreshPendingCount();
+    void get().syncNow();
+  },
+
+  generateShoppingList: async () => {
+    const state = get();
+    const toGenerate = state.lines
+      .filter((line) => line.quantite_cible !== null && line.quantite_cible > line.quantite_totale)
+      .map((line) => ({ line, diff: line.quantite_cible! - line.quantite_totale }));
+    if (toGenerate.length === 0) return;
+
+    set({ listeCoursesLoading: true, listeCoursesError: null });
+    try {
+      const spreadsheetId = getConfiguredSpreadsheetId();
+      // Action explicite déclenchée par un clic sur "Générer la liste" : interactive:true est
+      // légitime ici (peut ouvrir la popup de consentement si besoin).
+      let token = getCachedToken();
+      if (!token) token = await requestAccessToken(true);
+
+      let listeCourses = await fetchListeCourses(spreadsheetId, token);
+      const nowIso = new Date().toISOString();
+
+      for (const { line, diff } of toGenerate) {
+        const key = buildListeCoursesKey(line.nom, line.marque, line.unite);
+        const existingItem = listeCourses.find((it) => buildListeCoursesKey(it.nom, it.marque, it.unite) === key);
+
+        if (existingItem) {
+          const updatedItem: ListeCoursesItem = { ...existingItem, quantite: existingItem.quantite + diff };
+          await upsertListeCoursesItem(spreadsheetId, token, updatedItem);
+          listeCourses = listeCourses.map((it) => (it.id === existingItem.id ? updatedItem : it));
+        } else {
+          const newItem: ListeCoursesItem = {
+            id: crypto.randomUUID(),
+            nom: line.nom,
+            marque: line.marque,
+            categorie: line.categorie,
+            quantite: diff,
+            unite: line.unite,
+          };
+          await upsertListeCoursesItem(spreadsheetId, token, newItem);
+          listeCourses = [...listeCourses, newItem];
+        }
+
+        // Le brouillon est "résolu" une fois transformé en liste : la cible ne représente plus
+        // rien tant qu'une nouvelle construction de liste ne la redéfinit pas.
+        const resolvedLine: InventoryLine = { ...line, quantite_cible: null, date_maj: nowIso };
+        await upsertInventoryLine(spreadsheetId, token, resolvedLine);
+      }
+
+      const resolvedIds = new Set(toGenerate.map((x) => x.line.id));
+      const updatedLines = state.lines.map((line) => (resolvedIds.has(line.id) ? { ...line, quantite_cible: null } : line));
+
+      await Promise.all([setCachedInventory(updatedLines), setCachedListeCourses(listeCourses)]);
+      set({ lines: updatedLines, listeCourses });
+    } catch (err) {
+      set({ listeCoursesError: err instanceof Error ? err.message : 'Génération de la liste impossible.' });
+    } finally {
+      set({ listeCoursesLoading: false });
+    }
+  },
+
+  updateShoppingListItem: async (id, quantite) => {
+    const state = get();
+    const target = state.listeCourses.find((item) => item.id === id);
+    if (!target) return;
+
+    const updatedItem: ListeCoursesItem = { ...target, quantite: Math.max(0, quantite) };
+    const updatedList = state.listeCourses.map((item) => (item.id === id ? updatedItem : item));
+    set({ listeCourses: updatedList });
+    await setCachedListeCourses(updatedList);
+
+    set({ listeCoursesLoading: true, listeCoursesError: null });
+    try {
+      const spreadsheetId = getConfiguredSpreadsheetId();
+      let token = getCachedToken();
+      if (!token) token = await requestAccessToken(true);
+      await upsertListeCoursesItem(spreadsheetId, token, updatedItem);
+    } catch (err) {
+      set({ listeCoursesError: err instanceof Error ? err.message : 'Mise à jour impossible.' });
+    } finally {
+      set({ listeCoursesLoading: false });
+    }
+  },
+
+  deleteShoppingList: async () => {
+    set({ listeCoursesLoading: true, listeCoursesError: null });
+    try {
+      const spreadsheetId = getConfiguredSpreadsheetId();
+      let token = getCachedToken();
+      if (!token) token = await requestAccessToken(true);
+      await clearListeCourses(spreadsheetId, token);
+      await setCachedListeCourses([]);
+      set({ listeCourses: [] });
+    } catch (err) {
+      set({ listeCoursesError: err instanceof Error ? err.message : 'Suppression impossible.' });
+    } finally {
+      set({ listeCoursesLoading: false });
+    }
   },
 }));

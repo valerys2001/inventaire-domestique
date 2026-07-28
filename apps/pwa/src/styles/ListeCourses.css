@@ -1,0 +1,78 @@
+.liste-courses__actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.liste-courses__action {
+  flex: 1;
+  min-height: var(--tap-target);
+  border-radius: var(--radius);
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.liste-courses__action--danger {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.liste-courses__hint {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.liste-courses__error {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.liste-courses__items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.liste-courses__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.liste-courses__item-main {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.liste-courses__item-brand {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.liste-courses__item-category {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.liste-courses__item-qty {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.liste-courses__empty {
+  padding: var(--spacing-lg);
+  text-align: center;
+  color: var(--color-text-muted);
+}

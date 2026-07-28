@@ -1,10 +1,11 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { InventoryLine, PendingOperation } from '@inventaire/shared';
+import type { InventoryLine, ListeCoursesItem, PendingOperation } from '@inventaire/shared';
 
 const DB_NAME = 'inventaire-domestique';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_INVENTORY = 'inventoryLines';
 const STORE_PENDING = 'pendingOperations';
+const STORE_LISTE_COURSES = 'listeCourses';
 
 interface InventaireDB extends DBSchema {
   inventoryLines: {
@@ -14,6 +15,10 @@ interface InventaireDB extends DBSchema {
   pendingOperations: {
     key: string;
     value: PendingOperation;
+  };
+  listeCourses: {
+    key: string;
+    value: ListeCoursesItem;
   };
 }
 
@@ -28,6 +33,9 @@ function getDb(): Promise<IDBPDatabase<InventaireDB>> {
         }
         if (!db.objectStoreNames.contains(STORE_PENDING)) {
           db.createObjectStore(STORE_PENDING, { keyPath: 'local_id' });
+        }
+        if (!db.objectStoreNames.contains(STORE_LISTE_COURSES)) {
+          db.createObjectStore(STORE_LISTE_COURSES, { keyPath: 'id' });
         }
       },
     });
@@ -62,4 +70,17 @@ export async function getPendingOperations(): Promise<PendingOperation[]> {
 export async function removePendingOperation(localId: string): Promise<void> {
   const db = await getDb();
   await db.delete(STORE_PENDING, localId);
+}
+
+export async function getCachedListeCourses(): Promise<ListeCoursesItem[]> {
+  const db = await getDb();
+  return db.getAll(STORE_LISTE_COURSES);
+}
+
+export async function setCachedListeCourses(items: ListeCoursesItem[]): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(STORE_LISTE_COURSES, 'readwrite');
+  await tx.store.clear();
+  await Promise.all(items.map((item) => tx.store.put(item)));
+  await tx.done;
 }

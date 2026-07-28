@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { inventoryLineToRow, rowToInventoryLine, movementToRow } from './sheetsMapping';
-import type { InventoryLine, Movement } from './models';
+import { inventoryLineToRow, rowToInventoryLine, movementToRow, listeCoursesItemToRow, rowToListeCoursesItem } from './sheetsMapping';
+import type { InventoryLine, ListeCoursesItem, Movement } from './models';
 
 describe('inventoryLineToRow / rowToInventoryLine (aller-retour)', () => {
   it('conserve toutes les valeurs apres un aller-retour ligne -> row -> ligne', () => {
@@ -17,6 +17,7 @@ describe('inventoryLineToRow / rowToInventoryLine (aller-retour)', () => {
       utilisateur: 'local',
       cle_fusion: 'eau|marque x|1.5|l',
       seuil_alerte: 2,
+      quantite_cible: 12,
     };
 
     const row = inventoryLineToRow(line);
@@ -39,6 +40,7 @@ describe('inventoryLineToRow / rowToInventoryLine (aller-retour)', () => {
       utilisateur: 'local',
       cle_fusion: 'savon|marque y|100|g',
       seuil_alerte: null,
+      quantite_cible: null,
     };
 
     const row = inventoryLineToRow(line);
@@ -46,10 +48,11 @@ describe('inventoryLineToRow / rowToInventoryLine (aller-retour)', () => {
 
     expect(roundTripped.code_barre).toBeNull();
     expect(roundTripped.seuil_alerte).toBeNull();
+    expect(roundTripped.quantite_cible).toBeNull();
     expect(roundTripped).toEqual(line);
   });
 
-  it("respecte l'ordre des colonnes A:L (id en premiere position, seuil_alerte en derniere)", () => {
+  it("respecte l'ordre des colonnes A:M (id en premiere position, quantite_cible en derniere)", () => {
     const line: InventoryLine = {
       id: 'id-1',
       nom: 'nom-1',
@@ -63,11 +66,12 @@ describe('inventoryLineToRow / rowToInventoryLine (aller-retour)', () => {
       utilisateur: 'user-1',
       cle_fusion: 'cle-1',
       seuil_alerte: 1,
+      quantite_cible: 8,
     };
 
     const row = inventoryLineToRow(line);
     expect(row[0]).toBe('id-1');
-    expect(row[row.length - 1]).toBe('1');
+    expect(row[row.length - 1]).toBe('8');
   });
 });
 
@@ -97,5 +101,21 @@ describe('movementToRow', () => {
 
     const row = movementToRow(movement);
     expect(row[row.length - 1]).toBe('');
+  });
+});
+
+describe('listeCoursesItemToRow / rowToListeCoursesItem (aller-retour)', () => {
+  it('conserve toutes les valeurs apres un aller-retour item -> row -> item', () => {
+    const item: ListeCoursesItem = {
+      id: 'lc-1',
+      nom: 'Courgette',
+      marque: '',
+      categorie: 'legumes',
+      quantite: 1,
+      unite: 'unite',
+    };
+
+    const row = listeCoursesItemToRow(item);
+    expect(rowToListeCoursesItem(row)).toEqual(item);
   });
 });

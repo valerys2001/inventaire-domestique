@@ -3,6 +3,7 @@ import { InventoryList } from './screens/InventoryList/InventoryList';
 import { ProductIn } from './screens/ProductIn/ProductIn';
 import { ProductOut } from './screens/ProductOut/ProductOut';
 import { Besoins } from './screens/Besoins/Besoins';
+import { ListeCourses } from './screens/ListeCourses/ListeCourses';
 import { Settings } from './screens/Settings/Settings';
 import { LoginGate } from './screens/LoginGate/LoginGate';
 import { TabBar } from './components/TabBar/TabBar';
@@ -10,7 +11,7 @@ import { useInventoryStore } from './store/inventoryStore';
 import { initGoogleAuth, getConfiguredClientId } from './services/googleAuth';
 import './styles/App.css';
 
-export type Screen = 'inventaire' | 'entree' | 'sortie' | 'besoins' | 'reglages';
+export type Screen = 'inventaire' | 'entree' | 'sortie' | 'besoins' | 'liste' | 'reglages';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('inventaire');
@@ -20,11 +21,13 @@ export default function App() {
   const syncNow = useInventoryStore((s) => s.syncNow);
   const connected = useInventoryStore((s) => s.connected);
   const lines = useInventoryStore((s) => s.lines);
+  const listeCourses = useInventoryStore((s) => s.listeCourses);
 
   const besoinsCount = useMemo(
     () => lines.filter((line) => line.seuil_alerte !== null && line.quantite_totale <= line.seuil_alerte).length,
     [lines],
   );
+  const listeCount = useMemo(() => listeCourses.filter((item) => item.quantite > 0).length, [listeCourses]);
 
   useEffect(() => {
     // Le cache local (IndexedDB) est chargé en mémoire mais jamais affiché avant connexion
@@ -57,15 +60,18 @@ export default function App() {
   return (
     <div className="app-shell">
       <main className="app-content">
-        {screen === 'inventaire' && <InventoryList onSelectLine={goToSortie} />}
+        {screen === 'inventaire' && (
+          <InventoryList onSelectLine={goToSortie} onListeGenerated={() => setScreen('liste')} />
+        )}
         {screen === 'entree' && <ProductIn />}
         {screen === 'sortie' && (
           <ProductOut initialCleFusion={sortieTarget} onConsumed={() => setSortieTarget(null)} />
         )}
         {screen === 'besoins' && <Besoins />}
+        {screen === 'liste' && <ListeCourses />}
         {screen === 'reglages' && <Settings />}
       </main>
-      <TabBar active={screen} onChange={setScreen} besoinsCount={besoinsCount} />
+      <TabBar active={screen} onChange={setScreen} besoinsCount={besoinsCount} listeCount={listeCount} />
     </div>
   );
 }

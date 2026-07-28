@@ -1,12 +1,20 @@
 import {
+  INVENTAIRE_COLUMNS,
   INVENTAIRE_RANGE,
+  LISTE_COURSES_COLUMNS,
+  LISTE_COURSES_RANGE,
   MOUVEMENTS_RANGE,
   SHEET_TAB_INVENTAIRE,
+  SHEET_TAB_LISTE_COURSES,
   SHEET_TAB_MOUVEMENTS,
   rowToInventoryLine,
   inventoryLineToRow,
   movementToRow,
+  rowToListeCoursesItem,
+  listeCoursesItemToRow,
+  lastColumnLetter,
   type InventoryLine,
+  type ListeCoursesItem,
   type Movement,
 } from '@inventaire/shared';
 import { invalidateCachedToken, requestAccessToken } from './googleAuth';
@@ -83,7 +91,7 @@ export async function upsertInventoryLine(spreadsheetId: string, token: string, 
 
   if (existingRowIndex > 0) {
     const rowNumber = existingRowIndex + 1;
-    const updateRange = `${SHEET_TAB_INVENTAIRE}!A${rowNumber}:L${rowNumber}`;
+    const updateRange = `${SHEET_TAB_INVENTAIRE}!A${rowNumber}:${lastColumnLetter(INVENTAIRE_COLUMNS.length)}${rowNumber}`;
     await sheetsFetch(`${valuesUrl(spreadsheetId, updateRange)}?valueInputOption=RAW`, token, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -115,5 +123,54 @@ export async function appendMovement(spreadsheetId: string, token: string, movem
  */
 export async function clearMovements(spreadsheetId: string, token: string): Promise<void> {
   const range = `${SHEET_TAB_MOUVEMENTS}!A2:F`;
+  await sheetsFetch(`${valuesUrl(spreadsheetId, range)}:clear`, token, { method: 'POST' });
+}
+
+export async function fetchListeCourses(spreadsheetId: string, token: string): Promise<ListeCoursesItem[]> {
+  const response = await sheetsFetch(valuesUrl(spreadsheetId, LISTE_COURSES_RANGE), token);
+  const body = (await response.json()) as SheetsValuesResponse;
+  const rows = body.values ?? [];
+
+  return rows
+    .slice(1)
+    .filter((row) => row.some((cell) => cell !== undefined && cell !== ''))
+    .map(rowToListeCoursesItem);
+}
+
+/** Même logique update-par-id-ou-append que upsertInventoryLine, appliquée à ListeCourses. */
+export async function upsertListeCoursesItem(
+  spreadsheetId: string,
+  token: string,
+  item: ListeCoursesItem,
+): Promise<void> {
+  const idColumnRange = `${SHEET_TAB_LISTE_COURSES}!A:A`;
+  const idResponse = await sheetsFetch(valuesUrl(spreadsheetId, idColumnRange), token);
+  const idBody = (await idResponse.json()) as SheetsValuesResponse;
+  const idColumn = idBody.values ?? [];
+  const existingRowIndex = idColumn.findIndex((row, index) => index > 0 && row[0] === item.id);
+
+  const row = listeCoursesItemToRow(item);
+
+  if (existingRowIndex > 0) {
+    const rowNumber = existingRowIndex + 1;
+    const updateRange = `${SHEET_TAB_LISTE_COURSES}!A${rowNumber}:${lastColumnLetter(LISTE_COURSES_COLUMNS.length)}${rowNumber}`;
+    await sheetsFetch(`${valuesUrl(spreadsheetId, updateRange)}?valueInputOption=RAW`, token, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ range: updateRange, majorDimension: 'ROWS', values: [row] }),
+    });
+    return;
+  }
+
+  await sheetsFetch(appendUrl(spreadsheetId, LISTE_COURSES_RANGE), token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: [row] }),
+  });
+}
+
+/** Vide entièrement l'onglet ListeCourses (garde l'en-tête) — action "Supprimer la liste". */
+export async function clearListeCourses(spreadsheetId: string, token: string): Promise<void> {
+  const range = `${SHEET_TAB_LISTE_COURSES}!A2:${lastColumnLetter(LISTE_COURSES_COLUMNS.length)}`;
   await sheetsFetch(`${valuesUrl(spreadsheetId, range)}:clear`, token, { method: 'POST' });
 }

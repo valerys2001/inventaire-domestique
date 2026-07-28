@@ -29,18 +29,19 @@ docs/qa-checklist.md    Checklist de recette manuelle.
 ## 1. Créer le Google Sheet
 
 1. Créez un nouveau Google Sheet, partagé en modification avec tous les comptes Google des utilisateurs du foyer.
-2. Créez deux onglets avec **exactement** ces noms et cet ordre de colonnes (ligne d'en-tête ligne 1) :
+2. Créez trois onglets avec **exactement** ces noms et cet ordre de colonnes (ligne d'en-tête ligne 1) :
 
 **Onglet `Inventaire`**
 
-| A | B | C | D | E | F | G | H | I | J | K | L |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| id | nom | marque | categorie | contenance_unitaire | unite | quantite_totale | code_barre | date_maj | utilisateur | cle_fusion | seuil_alerte |
+| A | B | C | D | E | F | G | H | I | J | K | L | M |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| id | nom | marque | categorie | contenance_unitaire | unite | quantite_totale | code_barre | date_maj | utilisateur | cle_fusion | seuil_alerte | quantite_cible |
 
 - `categorie` : une des 9 valeurs figées — `epicerie_fine`, `epicerie_salee`, `epicerie_sucree`, `fruits`, `legumes`, `produits_frais`, `boissons`, `cosmetiques_hygiene`, `produits_entretien`.
 - `unite` : `unite`, `g`, `l`, `m`, ou `pourcent`.
 - `cle_fusion` : renseignée automatiquement par l'app à chaque écriture — ne pas éditer à la main.
 - `seuil_alerte` : optionnel (laisser vide pour utiliser le seuil par défaut de l'unité).
+- `quantite_cible` : optionnel, brouillon du mode "Construction de liste" — laisser vide.
 
 **Onglet `Mouvements`** (journal, append-only — sert d'audit pour les cas de synchronisation concurrente)
 
@@ -49,6 +50,12 @@ docs/qa-checklist.md    Checklist de recette manuelle.
 | date | cle_fusion | delta | type | utilisateur | commentaire |
 
 - `type` : `entree_scan`, `entree_manuelle`, `entree_extension`, ou `sortie`.
+
+**Onglet `ListeCourses`** (liste de courses générée depuis le mode "Construction de liste", partagée et éditable)
+
+| A | B | C | D | E | F |
+|---|---|---|---|---|---|
+| id | nom | marque | categorie | quantite | unite |
 
 3. Notez l'ID du spreadsheet dans son URL : `https://docs.google.com/spreadsheets/d/1amnBiOR0zpOb0T6kuprmS1PYiposlT4u0ylar1f7ong/edit?gid=0#gid=0/edit`.
 

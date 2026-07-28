@@ -11,6 +11,7 @@
  */
 
 import {
+  INVENTAIRE_COLUMNS,
   INVENTAIRE_RANGE,
   MOUVEMENTS_RANGE,
   SHEET_TAB_INVENTAIRE,
@@ -20,6 +21,7 @@ import {
   resolveMerge,
   parseQuantity,
   computeDeltaFromPack,
+  lastColumnLetter,
   type CandidateEntry,
   type InventoryLine,
   type Movement,
@@ -175,7 +177,7 @@ async function importItems(spreadsheetId: string, items: ScrapedItem[], token: s
       };
       await updateValues(
         spreadsheetId,
-        `${SHEET_TAB_INVENTAIRE}!A${rowNumber}:L${rowNumber}`,
+        `${SHEET_TAB_INVENTAIRE}!A${rowNumber}:${lastColumnLetter(INVENTAIRE_COLUMNS.length)}${rowNumber}`,
         [inventoryLineToRow(updatedLine)],
         token,
       );
@@ -195,6 +197,7 @@ async function importItems(spreadsheetId: string, items: ScrapedItem[], token: s
         utilisateur: EXTENSION_USER,
         cle_fusion: decision.cle_fusion,
         seuil_alerte: null,
+        quantite_cible: null,
       };
       const rowNumber = nextRow;
       nextRow += 1;
