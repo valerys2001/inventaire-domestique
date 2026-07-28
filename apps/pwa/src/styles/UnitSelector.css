@@ -30,6 +30,11 @@
   font-weight: 700;
 }
 
+.unit-selector__value--liquid {
+  flex: 1;
+  font-size: 16px;
+}
+
 .unit-selector--numeric .unit-selector__input {
   width: 100px;
   height: var(--tap-target);

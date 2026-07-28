@@ -127,6 +127,7 @@ export function InventoryList({ onSelectLine, onListeGenerated }: InventoryListP
                 <UnitSelector
                   unite={line.unite}
                   value={target}
+                  contenanceUnitaire={line.contenance_unitaire}
                   onChange={(value) => updateTargetQuantity(line.cle_fusion, value === line.quantite_totale ? null : value)}
                 />
                 {target > line.quantite_totale && (
