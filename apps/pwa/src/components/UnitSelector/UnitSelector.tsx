@@ -12,6 +12,13 @@ interface UnitSelectorProps {
    * de contenants.
    */
   contenanceUnitaire?: number;
+  /**
+   * Stock réel actuel (quantite_totale), fourni avec contenanceUnitaire pour les liquides.
+   * Le dernier contenant entamé peut être fractionnaire (jauge %) : ce % ne doit jamais se
+   * répercuter sur ce qui est achetable ici. On compte donc les contenants À ACHETER en plus
+   * de ce stock réel, jamais en redivisant une valeur cible par la contenance.
+   */
+  baseValue?: number;
 }
 
 const STEP_BY_UNIT: Record<Unit, number> = {
@@ -30,31 +37,38 @@ function roundStep(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export function UnitSelector({ unite, value, onChange, contenanceUnitaire }: UnitSelectorProps) {
+export function UnitSelector({ unite, value, onChange, contenanceUnitaire, baseValue }: UnitSelectorProps) {
   const step = STEP_BY_UNIT[unite];
 
-  if (unite === 'l' && contenanceUnitaire && contenanceUnitaire > 0) {
-    const count = Math.round(value / contenanceUnitaire);
-    const setCount = (next: number) => onChange(roundForDisplay(Math.max(0, next) * contenanceUnitaire));
+  if (unite === 'l' && contenanceUnitaire && contenanceUnitaire > 0 && baseValue !== undefined) {
+    // Contenants déjà possédés (le dernier peut être entamé/fractionnaire) : purement indicatif
+    // pour l'affichage, jamais utilisé pour calculer ce qu'il faut acheter.
+    const ownedCount = Math.round(baseValue / contenanceUnitaire);
+    // Contenants À ACHETER, comptés à partir du stock réel (baseValue) : garantit un écart
+    // toujours multiple entier de la contenance, quel que soit le % du dernier contenant.
+    const toBuy = Math.max(0, Math.round((value - baseValue) / contenanceUnitaire));
+    const totalCount = ownedCount + toBuy;
+
+    const setToBuy = (next: number) => onChange(roundForDisplay(baseValue + Math.max(0, next) * contenanceUnitaire));
 
     return (
       <div className="unit-selector unit-selector--stepper">
         <button
           type="button"
           className="unit-selector__button"
-          onClick={() => setCount(count - 1)}
-          disabled={count <= 0}
+          onClick={() => setToBuy(toBuy - 1)}
+          disabled={toBuy <= 0}
           aria-label="Diminuer"
         >
           −
         </button>
         <span className="unit-selector__value unit-selector__value--liquid">
-          {count} contenant{count > 1 ? 's' : ''} ({roundForDisplay(count * contenanceUnitaire)} L)
+          {totalCount} contenant{totalCount > 1 ? 's' : ''}
         </span>
         <button
           type="button"
           className="unit-selector__button"
-          onClick={() => setCount(count + 1)}
+          onClick={() => setToBuy(toBuy + 1)}
           aria-label="Augmenter"
         >
           +
