@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { buildMergeKey, formatQuantityDetailed, UNIT_LABELS } from '@inventaire/shared';
+import { buildMergeKey, formatQuantityDetailed, type Category, type InventoryLine, UNIT_LABELS } from '@inventaire/shared';
 import { BarcodeScanner } from '../../components/BarcodeScanner/BarcodeScanner';
 import { lookupProduct } from '../../services/productLookup';
 import { UnitSelector } from '../../components/UnitSelector/UnitSelector';
@@ -11,6 +11,21 @@ interface ProductOutProps {
   onConsumed?: () => void;
 }
 
+// Pour entretien/hygiène/boissons, "combien de bouteilles restantes" perd son sens une fois qu'il
+// n'en reste qu'une (ou moins) : mieux vaut jauger le niveau du dernier contenant en pourcentage
+// (ex. le dernier flacon de vinaigre passe de 100% à 50%) que de sauter directement de 1 à 0 unité.
+const GAUGE_CATEGORIES: Category[] = ['produits_entretien', 'cosmetiques_hygiene', 'boissons'];
+
+function isLastContainerGauge(line: InventoryLine): boolean {
+  return (
+    GAUGE_CATEGORIES.includes(line.categorie) &&
+    line.unite !== 'unite' &&
+    line.unite !== 'pourcent' &&
+    line.contenance_unitaire > 0 &&
+    line.quantite_totale <= line.contenance_unitaire
+  );
+}
+
 export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
   const lines = useInventoryStore((s) => s.lines);
   const applyExit = useInventoryStore((s) => s.applyExit);
@@ -20,6 +35,7 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
   const [method, setMethod] = useState<'liste' | 'scan'>('liste');
   const [selectedCleFusion, setSelectedCleFusion] = useState<string | null>(initialCleFusion);
   const [amount, setAmount] = useState(0);
+  const [gaugePercent, setGaugePercent] = useState(100);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<string | null>(null);
@@ -37,10 +53,16 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
     () => lines.find((line) => line.cle_fusion === selectedCleFusion) ?? null,
     [lines, selectedCleFusion],
   );
+  const useGauge = selectedLine !== null && isLastContainerGauge(selectedLine);
 
   useEffect(() => {
     if (selectedLine) {
       setAmount(selectedLine.unite === 'unite' ? Math.min(1, selectedLine.quantite_totale) : selectedLine.contenance_unitaire || 0);
+      setGaugePercent(
+        selectedLine.contenance_unitaire > 0
+          ? Math.round((selectedLine.quantite_totale / selectedLine.contenance_unitaire) * 100)
+          : 100,
+      );
       setThresholdInput(selectedLine.seuil_alerte !== null ? String(selectedLine.seuil_alerte) : '');
       setThresholdSaved(false);
     }
@@ -63,9 +85,20 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
   };
 
   const handleRetirer = async () => {
-    if (!selectedLine || amount <= 0) return;
-    await applyExit({ cle_fusion: selectedLine.cle_fusion, delta: -amount, utilisateur });
-    setConfirmation(`${amount} ${UNIT_LABELS[selectedLine.unite]} retiré(s) de ${selectedLine.nom}`);
+    if (!selectedLine) return;
+
+    if (useGauge) {
+      const newQuantity = (gaugePercent / 100) * selectedLine.contenance_unitaire;
+      const delta = newQuantity - selectedLine.quantite_totale;
+      if (delta >= 0) return; // la jauge n'a pas bougé (ou remontée, non permis en sortie)
+      await applyExit({ cle_fusion: selectedLine.cle_fusion, delta, utilisateur });
+      setConfirmation(`${selectedLine.nom} : dernier contenant descendu à ${gaugePercent}%`);
+    } else {
+      if (amount <= 0) return;
+      await applyExit({ cle_fusion: selectedLine.cle_fusion, delta: -amount, utilisateur });
+      setConfirmation(`${amount} ${UNIT_LABELS[selectedLine.unite]} retiré(s) de ${selectedLine.nom}`);
+    }
+
     setSelectedCleFusion(null);
     onConsumed?.();
   };
@@ -162,7 +195,14 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
             En stock :{' '}
             {formatQuantityDetailed(selectedLine.quantite_totale, selectedLine.contenance_unitaire, selectedLine.unite)}
           </p>
-          <UnitSelector unite={selectedLine.unite} value={amount} onChange={setAmount} />
+          {useGauge ? (
+            <>
+              <p className="product-out__gauge-hint">Dernier contenant — niveau restant :</p>
+              <UnitSelector unite="pourcent" value={gaugePercent} onChange={setGaugePercent} />
+            </>
+          ) : (
+            <UnitSelector unite={selectedLine.unite} value={amount} onChange={setAmount} />
+          )}
           <button type="button" className="product-out__submit" onClick={handleRetirer}>
             Retirer
           </button>

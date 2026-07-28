@@ -1,11 +1,10 @@
 import { create } from 'zustand';
 import type { Category, InventoryLine, MovementType, PendingOperation } from '@inventaire/shared';
-import { buildMergeKey, resolveMerge, type CandidateEntry, type MergeDecision } from '@inventaire/shared';
+import { resolveMerge, type CandidateEntry, type MergeDecision } from '@inventaire/shared';
 import { getCachedInventory, setCachedInventory } from '../services/localCache';
 import { enqueue, flush, getPendingCount } from '../services/offlineQueue';
 import { clearMovements, fetchInventory } from '../services/sheetsClient';
 import { getCachedToken, getConfiguredSpreadsheetId, requestAccessToken, signOut } from '../services/googleAuth';
-import { PRODUCE_SEED } from '../data/produceSeed';
 
 const UTILISATEUR_STORAGE_KEY = 'inventaire.utilisateur';
 
@@ -83,8 +82,6 @@ interface InventoryStoreState {
    * porte d'entrée à l'app : tant que false, l'UI n'affiche qu'un écran de connexion. */
   connected: boolean;
   signOutGoogle: () => void;
-  /** Crée les fruits/légumes courants manquants à quantité 0. Retourne le nombre ajouté. */
-  seedProduce: () => Promise<number>;
 }
 
 export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
@@ -311,26 +308,5 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
   signOutGoogle: () => {
     signOut();
     set({ connected: false });
-  },
-
-  seedProduce: async () => {
-    const existingKeys = new Set(get().lines.map((l) => l.cle_fusion));
-    const toCreate = PRODUCE_SEED.filter((item) => !existingKeys.has(buildMergeKey(item.nom, '', 1, 'unite')));
-    for (const item of toCreate) {
-      await get().applyEntry({
-        nom: item.nom,
-        marque: '',
-        categorie: item.categorie,
-        contenance_unitaire: 1,
-        unite: 'unite',
-        delta: 0,
-        code_barre: null,
-      });
-    }
-    // Pas de mode interactif ici : seedProduce() peut être déclenché automatiquement au chargement
-    // de l'app (hors geste utilisateur direct), donc jamais de popup — un jeton est déjà en cache
-    // à ce stade de toute façon (l'app n'affiche son contenu qu'une fois connectée).
-    if (toCreate.length > 0) void get().syncNow();
-    return toCreate.length;
   },
 }));

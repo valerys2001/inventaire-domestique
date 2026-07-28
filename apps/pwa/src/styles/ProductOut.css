@@ -60,6 +60,12 @@
   gap: var(--spacing-md);
 }
 
+.product-out__gauge-hint {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
 .product-out__submit {
   min-height: var(--tap-target);
   border-radius: var(--radius);

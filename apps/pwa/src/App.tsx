@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { InventoryList } from './screens/InventoryList/InventoryList';
 import { ProductIn } from './screens/ProductIn/ProductIn';
 import { ProductOut } from './screens/ProductOut/ProductOut';
@@ -19,9 +19,7 @@ export default function App() {
   const loadFromCache = useInventoryStore((s) => s.loadFromCache);
   const syncNow = useInventoryStore((s) => s.syncNow);
   const connected = useInventoryStore((s) => s.connected);
-  const seedProduce = useInventoryStore((s) => s.seedProduce);
   const lines = useInventoryStore((s) => s.lines);
-  const seededRef = useRef(false);
 
   const besoinsCount = useMemo(
     () => lines.filter((line) => line.seuil_alerte !== null && line.quantite_totale <= line.seuil_alerte).length,
@@ -46,13 +44,6 @@ export default function App() {
       }
     })();
   }, [loadFromCache, syncNow]);
-
-  useEffect(() => {
-    if (connected && !seededRef.current) {
-      seededRef.current = true;
-      void seedProduce();
-    }
-  }, [connected, seedProduce]);
 
   const goToSortie = (cleFusion: string) => {
     setSortieTarget(cleFusion);
