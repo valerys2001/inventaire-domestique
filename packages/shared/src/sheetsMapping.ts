@@ -48,6 +48,7 @@ export function rowToListeCoursesItem(row: string[]): ListeCoursesItem {
     categorie: get('categorie') as Category,
     quantite: Number(get('quantite')) || 0,
     unite: get('unite') as Unit,
+    contenance_unitaire: get('contenance_unitaire') ? Number(get('contenance_unitaire')) : null,
   };
 }
 

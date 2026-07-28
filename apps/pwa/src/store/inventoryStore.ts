@@ -395,8 +395,10 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
       const nowIso = new Date().toISOString();
 
       for (const { line, diff } of toGenerate) {
-        const key = buildListeCoursesKey(line.nom, line.marque, line.unite);
-        const existingItem = listeCourses.find((it) => buildListeCoursesKey(it.nom, it.marque, it.unite) === key);
+        const key = buildListeCoursesKey(line.nom, line.marque, line.contenance_unitaire, line.unite);
+        const existingItem = listeCourses.find(
+          (it) => buildListeCoursesKey(it.nom, it.marque, it.contenance_unitaire, it.unite) === key,
+        );
 
         if (existingItem) {
           const updatedItem: ListeCoursesItem = { ...existingItem, quantite: existingItem.quantite + diff };
@@ -410,6 +412,7 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
             categorie: line.categorie,
             quantite: diff,
             unite: line.unite,
+            contenance_unitaire: line.contenance_unitaire,
           };
           await upsertListeCoursesItem(spreadsheetId, token, newItem);
           listeCourses = [...listeCourses, newItem];

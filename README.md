@@ -40,7 +40,7 @@ docs/qa-checklist.md    Checklist de recette manuelle.
 - `categorie` : une des 9 valeurs figées — `epicerie_fine`, `epicerie_salee`, `epicerie_sucree`, `fruits`, `legumes`, `produits_frais`, `boissons`, `cosmetiques_hygiene`, `produits_entretien`.
 - `unite` : `unite`, `g`, `l`, `m`, ou `pourcent`.
 - `cle_fusion` : renseignée automatiquement par l'app à chaque écriture — ne pas éditer à la main.
-- `seuil_alerte` : optionnel (laisser vide pour utiliser le seuil par défaut de l'unité).
+- `seuil_alerte` : optionnel (laisser vide pour utiliser le seuil par défaut de l'unité). Pour `unite = l`, exprimé en **nombre de contenants** (ex. `1` = alerte dès qu'il ne reste plus qu'un contenant), pas en litres.
 - `quantite_cible` : optionnel, brouillon du mode "Construction de liste" — laisser vide.
 
 **Onglet `Mouvements`** (journal, append-only — sert d'audit pour les cas de synchronisation concurrente)
@@ -53,9 +53,11 @@ docs/qa-checklist.md    Checklist de recette manuelle.
 
 **Onglet `ListeCourses`** (liste de courses générée depuis le mode "Construction de liste", partagée et éditable)
 
-| A | B | C | D | E | F |
-|---|---|---|---|---|---|
-| id | nom | marque | categorie | quantite | unite |
+| A | B | C | D | E | F | G |
+|---|---|---|---|---|---|---|
+| id | nom | marque | categorie | quantite | unite | contenance_unitaire |
+
+- `contenance_unitaire` : reprise de la ligne Inventaire d'origine (ex. `1.5`) pour les produits liquides — permet d'afficher "N contenants" et de garder 1 L / 1.5 L séparés dans la liste. Laisser vide pour un produit non liquide.
 
 3. Notez l'ID du spreadsheet dans son URL : `https://docs.google.com/spreadsheets/d/1amnBiOR0zpOb0T6kuprmS1PYiposlT4u0ylar1f7ong/edit?gid=0#gid=0/edit`.
 

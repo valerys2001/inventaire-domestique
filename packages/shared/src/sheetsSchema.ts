@@ -29,11 +29,19 @@ export const INVENTAIRE_COLUMNS = [
 export const MOUVEMENTS_COLUMNS = ['date', 'cle_fusion', 'delta', 'type', 'utilisateur', 'commentaire'] as const;
 
 /** Ordre des colonnes de l'onglet ListeCourses (liste de courses générée, partagée et éditable). */
-export const LISTE_COURSES_COLUMNS = ['id', 'nom', 'marque', 'categorie', 'quantite', 'unite'] as const;
+export const LISTE_COURSES_COLUMNS = [
+  'id',
+  'nom',
+  'marque',
+  'categorie',
+  'quantite',
+  'unite',
+  'contenance_unitaire',
+] as const;
 
 export const INVENTAIRE_RANGE = `${SHEET_TAB_INVENTAIRE}!A:M`;
 export const MOUVEMENTS_RANGE = `${SHEET_TAB_MOUVEMENTS}!A:F`;
-export const LISTE_COURSES_RANGE = `${SHEET_TAB_LISTE_COURSES}!A:F`;
+export const LISTE_COURSES_RANGE = `${SHEET_TAB_LISTE_COURSES}!A:G`;
 
 /**
  * Lettre de colonne Sheets pour un nombre de colonnes donné (1 -> A, 26 -> Z, 27 -> AA...).

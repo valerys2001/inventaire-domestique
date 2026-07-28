@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeDeltaFromPack, formatQuantityDetailed, roundForDisplay } from './quantity';
+import { computeDeltaFromPack, formatLiquidQuantity, formatQuantityDetailed, roundForDisplay } from './quantity';
 
 describe('computeDeltaFromPack', () => {
   it('calcule 9 pour un pack de 6 bouteilles de 1.5 L', () => {
@@ -40,8 +40,8 @@ describe('roundForDisplay', () => {
 });
 
 describe('formatQuantityDetailed', () => {
-  it('montre le total ET le détail par contenant pour un pack (cas du cahier des charges)', () => {
-    expect(formatQuantityDetailed(9, 1.5, 'l')).toBe('9 litres (6 × 1.5 litres)');
+  it('affiche un compte de contenants pour un liquide, jamais de litres (cas pack)', () => {
+    expect(formatQuantityDetailed(9, 1.5, 'l')).toBe('6 contenants');
   });
 
   it("n'ajoute pas de détail quand l'unité est déjà le compte (unite/pourcent)", () => {
@@ -49,16 +49,31 @@ describe('formatQuantityDetailed', () => {
     expect(formatQuantityDetailed(80, 100, 'pourcent')).toBe('80 % restant');
   });
 
-  it("n'ajoute pas de détail quand il n'y a qu'un seul contenant (contenance == total)", () => {
-    expect(formatQuantityDetailed(1.5, 1.5, 'l')).toBe('1.5 litres');
+  it("affiche 1 seul contenant quand il n'y en a qu'un (contenance == total)", () => {
+    expect(formatQuantityDetailed(1.5, 1.5, 'l')).toBe('1 contenant');
   });
 
-  it('marque le compte comme approximatif après une sortie partielle (contenant entamé)', () => {
-    // 8.2 L restants sur des bouteilles de 1.5 L -> pas un compte entier de bouteilles pleines
-    expect(formatQuantityDetailed(8.2, 1.5, 'l')).toContain('≈5.5');
+  it('affiche le % du dernier contenant entamé pour un liquide', () => {
+    // 8.2 L restants sur des bouteilles de 1.5 L -> 5 pleins + dernier entamé à 47%
+    expect(formatQuantityDetailed(8.2, 1.5, 'l')).toBe('6 contenants (dernier à 47%)');
   });
 
   it("n'affiche rien de spécial pour une contenance non renseignée (0)", () => {
     expect(formatQuantityDetailed(3, 0, 'g')).toBe('3 grammes');
+    expect(formatQuantityDetailed(3, 0, 'l')).toBe('3 litres');
+  });
+});
+
+describe('formatLiquidQuantity', () => {
+  it('ne montre jamais de L/mL/cL', () => {
+    expect(formatLiquidQuantity(9, 1.5)).not.toMatch(/[lL]itres?|[mc]l\b/);
+  });
+
+  it('renvoie "0 contenant" quand le stock est vide', () => {
+    expect(formatLiquidQuantity(0, 1.5)).toBe('0 contenant');
+  });
+
+  it('compte le dernier contenant entamé même à un stock très bas', () => {
+    expect(formatLiquidQuantity(0.1, 1.5)).toBe('1 contenant (dernier à 7%)');
   });
 });

@@ -49,3 +49,10 @@ export const DEFAULT_LOW_STOCK_THRESHOLD: Record<Unit, number> = {
   m: 0.5,
   pourcent: 15,
 };
+
+/**
+ * Seuil "stock bas" par défaut pour les liquides, en nombre de contenants (pas en litres) :
+ * la contenance varie d'un produit à l'autre, donc un seuil en litres n'a pas de sens générique.
+ * Remplace DEFAULT_LOW_STOCK_THRESHOLD.l pour toute comparaison sur un produit liquide.
+ */
+export const DEFAULT_LOW_STOCK_CONTAINERS = 1;

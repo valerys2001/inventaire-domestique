@@ -1,6 +1,6 @@
 import type { Unit } from './categories';
 
-function normalize(s: string): string {
+export function normalize(s: string): string {
   return s
     .trim()
     .toLowerCase()
@@ -18,10 +18,16 @@ export function buildMergeKey(nom: string, marque: string, contenanceUnitaire: n
 }
 
 /**
- * Clé de regroupement pour l'onglet ListeCourses : pas de contenance unitaire à ce niveau (la
- * liste de courses raisonne en quantité totale à acheter, pas en conditionnement), donc produit +
- * marque + unité suffisent à décider si un nouvel écart rejoint un article déjà présent.
+ * Clé de regroupement pour l'onglet ListeCourses. Inclut la contenance unitaire (comme
+ * buildMergeKey) : un écart sur des bouteilles de 1 L ne doit jamais se cumuler avec un écart
+ * sur des bouteilles de 1.5 L dans un seul article de la liste de courses, sous peine de ne
+ * plus savoir combien acheter de chaque taille.
  */
-export function buildListeCoursesKey(nom: string, marque: string, unite: Unit): string {
-  return `${normalize(nom)}|${normalize(marque)}|${unite}`;
+export function buildListeCoursesKey(
+  nom: string,
+  marque: string,
+  contenanceUnitaire: number | null,
+  unite: Unit,
+): string {
+  return `${normalize(nom)}|${normalize(marque)}|${contenanceUnitaire ?? ''}|${unite}`;
 }

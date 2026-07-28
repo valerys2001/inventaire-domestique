@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
 import {
   CATEGORY_LABELS,
+  DEFAULT_LOW_STOCK_CONTAINERS,
   DEFAULT_LOW_STOCK_THRESHOLD,
   formatQuantityDetailed,
+  groupLiquidLines,
+  stockComparableQuantity,
   type InventoryLine,
 } from '@inventaire/shared';
 import { CategoryFilter } from '../../components/CategoryFilter/CategoryFilter';
+import { LiquidFolders } from '../../components/LiquidFolders/LiquidFolders';
 import { UnitSelector } from '../../components/UnitSelector/UnitSelector';
 import { useInventoryStore } from '../../store/inventoryStore';
 import '../../styles/InventoryList.css';
@@ -16,8 +20,9 @@ interface InventoryListProps {
 }
 
 function isLowStock(line: InventoryLine): boolean {
-  const threshold = line.seuil_alerte ?? DEFAULT_LOW_STOCK_THRESHOLD[line.unite];
-  return line.quantite_totale <= threshold;
+  const defaultThreshold = line.unite === 'l' ? DEFAULT_LOW_STOCK_CONTAINERS : DEFAULT_LOW_STOCK_THRESHOLD[line.unite];
+  const threshold = line.seuil_alerte ?? defaultThreshold;
+  return stockComparableQuantity(line) <= threshold;
 }
 
 export function InventoryList({ onSelectLine, onListeGenerated }: InventoryListProps) {
@@ -59,10 +64,66 @@ export function InventoryList({ onSelectLine, onListeGenerated }: InventoryListP
     [lines],
   );
 
+  const otherLines = useMemo(() => visibleLines.filter((l) => l.unite !== 'l'), [visibleLines]);
+  const liquidFolders = useMemo(
+    () => groupLiquidLines(visibleLines.filter((l) => l.unite === 'l')),
+    [visibleLines],
+  );
+
   const handleGenerate = async () => {
     await generateShoppingList();
     setBuildMode(false);
     onListeGenerated?.();
+  };
+
+  const renderLine = (line: InventoryLine) => {
+    const low = isLowStock(line);
+
+    if (buildMode) {
+      const target = line.quantite_cible ?? line.quantite_totale;
+      return (
+        <li key={line.id} className="inventory-list__build-item">
+          <div className="inventory-list__item-main">
+            <span className="inventory-list__item-name">{line.nom}</span>
+            <span className="inventory-list__item-brand">{line.marque}</span>
+          </div>
+          <p className="inventory-list__build-current">
+            Actuel : {formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}
+          </p>
+          <UnitSelector
+            unite={line.unite}
+            value={target}
+            contenanceUnitaire={line.contenance_unitaire}
+            baseValue={line.quantite_totale}
+            onChange={(value) => updateTargetQuantity(line.cle_fusion, value === line.quantite_totale ? null : value)}
+          />
+          {target > line.quantite_totale && (
+            <p className="inventory-list__build-diff">
+              + {formatQuantityDetailed(target - line.quantite_totale, line.contenance_unitaire, line.unite)} à
+              acheter
+            </p>
+          )}
+        </li>
+      );
+    }
+
+    return (
+      <li key={line.id}>
+        <button type="button" className="inventory-list__item" onClick={() => onSelectLine(line.cle_fusion)}>
+          <div className="inventory-list__item-main">
+            <span className="inventory-list__item-name">{line.nom}</span>
+            <span className="inventory-list__item-brand">{line.marque}</span>
+          </div>
+          <div className="inventory-list__item-meta">
+            <span className="inventory-list__item-category">{CATEGORY_LABELS[line.categorie]}</span>
+            <span className={`inventory-list__item-qty${low ? ' inventory-list__item-qty--low' : ''}`}>
+              {formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}
+              {low && <span className="inventory-list__badge">Stock bas</span>}
+            </span>
+          </div>
+        </button>
+      </li>
+    );
   };
 
   return (
@@ -109,56 +170,10 @@ export function InventoryList({ onSelectLine, onListeGenerated }: InventoryListP
         </button>
       )}
 
+      <LiquidFolders folders={liquidFolders} renderItem={renderLine} />
+
       <ul className="inventory-list__items">
-        {visibleLines.map((line) => {
-          const low = isLowStock(line);
-
-          if (buildMode) {
-            const target = line.quantite_cible ?? line.quantite_totale;
-            return (
-              <li key={line.id} className="inventory-list__build-item">
-                <div className="inventory-list__item-main">
-                  <span className="inventory-list__item-name">{line.nom}</span>
-                  <span className="inventory-list__item-brand">{line.marque}</span>
-                </div>
-                <p className="inventory-list__build-current">
-                  Actuel : {formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}
-                </p>
-                <UnitSelector
-                  unite={line.unite}
-                  value={target}
-                  contenanceUnitaire={line.contenance_unitaire}
-                  baseValue={line.quantite_totale}
-                  onChange={(value) => updateTargetQuantity(line.cle_fusion, value === line.quantite_totale ? null : value)}
-                />
-                {target > line.quantite_totale && (
-                  <p className="inventory-list__build-diff">
-                    + {formatQuantityDetailed(target - line.quantite_totale, line.contenance_unitaire, line.unite)} à
-                    acheter
-                  </p>
-                )}
-              </li>
-            );
-          }
-
-          return (
-            <li key={line.id}>
-              <button type="button" className="inventory-list__item" onClick={() => onSelectLine(line.cle_fusion)}>
-                <div className="inventory-list__item-main">
-                  <span className="inventory-list__item-name">{line.nom}</span>
-                  <span className="inventory-list__item-brand">{line.marque}</span>
-                </div>
-                <div className="inventory-list__item-meta">
-                  <span className="inventory-list__item-category">{CATEGORY_LABELS[line.categorie]}</span>
-                  <span className={`inventory-list__item-qty${low ? ' inventory-list__item-qty--low' : ''}`}>
-                    {formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}
-                    {low && <span className="inventory-list__badge">Stock bas</span>}
-                  </span>
-                </div>
-              </button>
-            </li>
-          );
-        })}
+        {otherLines.map(renderLine)}
         {visibleLines.length === 0 && <li className="inventory-list__empty">Aucun produit dans cette catégorie.</li>}
       </ul>
 

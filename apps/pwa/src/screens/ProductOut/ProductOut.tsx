@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { buildMergeKey, formatQuantityDetailed, type Category, type InventoryLine, UNIT_LABELS } from '@inventaire/shared';
+import {
+  buildMergeKey,
+  formatQuantityDetailed,
+  groupLiquidLines,
+  type Category,
+  type InventoryLine,
+  UNIT_LABELS,
+} from '@inventaire/shared';
 import { BarcodeScanner } from '../../components/BarcodeScanner/BarcodeScanner';
+import { LiquidFolders } from '../../components/LiquidFolders/LiquidFolders';
 import { lookupProduct } from '../../services/productLookup';
 import { UnitSelector } from '../../components/UnitSelector/UnitSelector';
 import { useInventoryStore } from '../../store/inventoryStore';
@@ -54,6 +62,8 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
     [lines, selectedCleFusion],
   );
   const useGauge = selectedLine !== null && isLastContainerGauge(selectedLine);
+  const otherLines = useMemo(() => lines.filter((line) => line.unite !== 'l'), [lines]);
+  const liquidFolders = useMemo(() => groupLiquidLines(lines), [lines]);
 
   useEffect(() => {
     if (selectedLine) {
@@ -167,23 +177,42 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
       {confirmation && <div className="product-out__confirmation">{confirmation}</div>}
 
       {method === 'liste' && !selectedLine && (
-        <ul className="product-out__list">
-          {lines.map((line) => (
-            <li key={line.id}>
-              <button
-                type="button"
-                className="product-out__list-item"
-                onClick={() => setSelectedCleFusion(line.cle_fusion)}
-              >
-                <span>
-                  {line.nom} {line.marque}
-                </span>
-                <span>{formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}</span>
-              </button>
-            </li>
-          ))}
-          {lines.length === 0 && <li className="product-out__empty">Aucun produit en stock.</li>}
-        </ul>
+        <>
+          <LiquidFolders
+            folders={liquidFolders}
+            renderItem={(line) => (
+              <li key={line.id}>
+                <button
+                  type="button"
+                  className="product-out__list-item"
+                  onClick={() => setSelectedCleFusion(line.cle_fusion)}
+                >
+                  <span>
+                    {line.nom} {line.marque}
+                  </span>
+                  <span>{formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}</span>
+                </button>
+              </li>
+            )}
+          />
+          <ul className="product-out__list">
+            {otherLines.map((line) => (
+              <li key={line.id}>
+                <button
+                  type="button"
+                  className="product-out__list-item"
+                  onClick={() => setSelectedCleFusion(line.cle_fusion)}
+                >
+                  <span>
+                    {line.nom} {line.marque}
+                  </span>
+                  <span>{formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}</span>
+                </button>
+              </li>
+            ))}
+            {lines.length === 0 && <li className="product-out__empty">Aucun produit en stock.</li>}
+          </ul>
+        </>
       )}
 
       {method === 'liste' && selectedLine && (
@@ -212,14 +241,17 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
 
           <div className="product-out__threshold">
             <label className="product-out__field">
-              <span>Seuil "Besoins" ({UNIT_LABELS[selectedLine.unite]}) — vide = non suivi</span>
+              <span>
+                Seuil "Besoins" ({selectedLine.unite === 'l' ? 'contenants' : UNIT_LABELS[selectedLine.unite]}) — vide
+                = non suivi
+              </span>
               <input
                 type="number"
                 min={0}
-                step="0.01"
+                step={selectedLine.unite === 'l' ? 1 : 0.01}
                 value={thresholdInput}
                 onChange={(e) => setThresholdInput(e.target.value)}
-                placeholder="ex: 2"
+                placeholder={selectedLine.unite === 'l' ? 'ex: 1' : 'ex: 2'}
               />
             </label>
             <button type="button" className="product-out__cancel" onClick={handleSaveThreshold}>

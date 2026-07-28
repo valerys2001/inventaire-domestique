@@ -71,6 +71,13 @@ export interface ListeCoursesItem {
   categorie: Category;
   quantite: number;
   unite: Unit;
+  /**
+   * Contenance d'un contenant, reprise de la ligne Inventaire d'origine. Sert à afficher "N
+   * contenants" pour les liquides (au lieu de litres) et à regrouper par dossier/taille comme
+   * dans l'inventaire (cf. groupLiquidLines). `null` pour les produits non liquides ou les
+   * articles créés avant l'ajout de ce champ.
+   */
+  contenance_unitaire: number | null;
 }
 
 /** Une opération en attente dans la file de synchronisation offline. */

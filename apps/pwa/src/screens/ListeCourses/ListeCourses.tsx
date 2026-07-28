@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { CATEGORY_LABELS, UNIT_LABELS } from '@inventaire/shared';
+import { CATEGORY_LABELS, formatQuantityDetailed, groupLiquidLines, UNIT_LABELS, type ListeCoursesItem } from '@inventaire/shared';
+import { LiquidFolders } from '../../components/LiquidFolders/LiquidFolders';
 import { UnitSelector } from '../../components/UnitSelector/UnitSelector';
 import { useInventoryStore } from '../../store/inventoryStore';
 import '../../styles/ListeCourses.css';
@@ -18,12 +19,43 @@ export function ListeCourses() {
     [listeCourses],
   );
 
+  const otherItems = useMemo(() => visibleItems.filter((item) => item.unite !== 'l'), [visibleItems]);
+  const liquidFolders = useMemo(
+    () => groupLiquidLines(visibleItems.filter((item) => item.unite === 'l')),
+    [visibleItems],
+  );
+
   const handleDelete = () => {
     if (confirm('Supprimer toute la liste de courses ?')) {
       void deleteShoppingList();
       setEditing(false);
     }
   };
+
+  const renderItem = (item: ListeCoursesItem) => (
+    <li key={item.id} className="liste-courses__item">
+      <div className="liste-courses__item-main">
+        <span className="liste-courses__item-name">{item.nom}</span>
+        {item.marque && <span className="liste-courses__item-brand">{item.marque}</span>}
+      </div>
+      <span className="liste-courses__item-category">{CATEGORY_LABELS[item.categorie]}</span>
+      {editing ? (
+        <UnitSelector
+          unite={item.unite}
+          value={item.quantite}
+          contenanceUnitaire={item.contenance_unitaire ?? undefined}
+          baseValue={item.unite === 'l' ? 0 : undefined}
+          onChange={(value) => updateShoppingListItem(item.id, value)}
+        />
+      ) : (
+        <span className="liste-courses__item-qty">
+          {item.unite === 'l'
+            ? formatQuantityDetailed(item.quantite, item.contenance_unitaire ?? 0, item.unite)
+            : `${item.quantite} ${UNIT_LABELS[item.unite]}`}
+        </span>
+      )}
+    </li>
+  );
 
   return (
     <div className="liste-courses">
@@ -43,27 +75,10 @@ export function ListeCourses() {
       {listeCoursesError && <p className="liste-courses__error">{listeCoursesError}</p>}
       {listeCoursesLoading && <p className="liste-courses__hint">Mise à jour…</p>}
 
+      <LiquidFolders folders={liquidFolders} renderItem={renderItem} />
+
       <ul className="liste-courses__items">
-        {visibleItems.map((item) => (
-          <li key={item.id} className="liste-courses__item">
-            <div className="liste-courses__item-main">
-              <span className="liste-courses__item-name">{item.nom}</span>
-              {item.marque && <span className="liste-courses__item-brand">{item.marque}</span>}
-            </div>
-            <span className="liste-courses__item-category">{CATEGORY_LABELS[item.categorie]}</span>
-            {editing ? (
-              <UnitSelector
-                unite={item.unite}
-                value={item.quantite}
-                onChange={(value) => updateShoppingListItem(item.id, value)}
-              />
-            ) : (
-              <span className="liste-courses__item-qty">
-                {item.quantite} {UNIT_LABELS[item.unite]}
-              </span>
-            )}
-          </li>
-        ))}
+        {otherItems.map(renderItem)}
         {visibleItems.length === 0 && (
           <li className="liste-courses__empty">
             Aucune liste en cours. Va dans Inventaire → "Construction de liste" pour en créer une.

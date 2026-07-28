@@ -17,18 +17,81 @@ export function roundForDisplay(quantite: number): number {
   return Math.round(quantite * 100) / 100;
 }
 
+export interface LiquidQuantityDisplay {
+  /** Contenants pleins, non entamés. */
+  fullContainers: number;
+  /** % restant du dernier contenant entamé, ou null si aucun contenant n'est entamé. */
+  lastContainerPercent: number | null;
+  /** fullContainers + 1 si un dernier contenant est entamé, sinon fullContainers. */
+  totalContainers: number;
+}
+
+/**
+ * Décompose un stock liquide en contenants pleins + % du dernier entamé. Le % vient de la
+ * jauge du dernier contenant (cf. ProductOut) : il ne doit jamais se traduire en litres pour
+ * l'utilisateur, seulement servir à compter "combien de contenants ai-je / me faut-il".
+ */
+export function computeLiquidQuantityDisplay(
+  quantiteTotale: number,
+  contenanceUnitaire: number,
+): LiquidQuantityDisplay {
+  if (!(contenanceUnitaire > 0) || !(quantiteTotale > 0)) {
+    return { fullContainers: 0, lastContainerPercent: null, totalContainers: 0 };
+  }
+
+  const ratio = quantiteTotale / contenanceUnitaire;
+  const fullContainers = Math.floor(ratio + 1e-6);
+  const remainderRatio = ratio - fullContainers;
+
+  if (remainderRatio < 0.02) {
+    return { fullContainers, lastContainerPercent: null, totalContainers: fullContainers };
+  }
+  return {
+    fullContainers,
+    lastContainerPercent: Math.round(remainderRatio * 100),
+    totalContainers: fullContainers + 1,
+  };
+}
+
+/** Ex: "6 contenants" ou "6 contenants (dernier à 47%)". Jamais de L/mL/cL, cf. demande utilisateur. */
+export function formatLiquidQuantity(quantiteTotale: number, contenanceUnitaire: number): string {
+  const { lastContainerPercent, totalContainers } = computeLiquidQuantityDisplay(quantiteTotale, contenanceUnitaire);
+  if (totalContainers === 0) return '0 contenant';
+  const base = `${totalContainers} contenant${totalContainers > 1 ? 's' : ''}`;
+  return lastContainerPercent === null ? base : `${base} (dernier à ${lastContainerPercent}%)`;
+}
+
+/**
+ * Grandeur comparable à un seuil "stock bas" : pour les liquides, en nombre de contenants
+ * (fractionnaire, ex. 1.4) plutôt qu'en litres — un seuil en litres n'a pas de sens générique
+ * puisque la contenance varie d'un produit à l'autre. Pour les autres unités, la quantité brute.
+ */
+export function stockComparableQuantity(line: {
+  unite: Unit;
+  quantite_totale: number;
+  contenance_unitaire: number;
+}): number {
+  if (line.unite === 'l' && line.contenance_unitaire > 0) {
+    return line.quantite_totale / line.contenance_unitaire;
+  }
+  return line.quantite_totale;
+}
+
 /**
  * "Un pack" ne veut rien dire tout seul : on affiche toujours le total ET le détail par
- * contenant (ex. "9 L (6 × 1,5 L)"), jamais l'un sans l'autre, dès que la contenance unitaire
- * est significative. Le nombre de contenants est recalculé depuis quantite_totale/contenance
- * plutôt que stocké séparément (peut ne plus être un compte entier après une sortie partielle,
- * ex. un contenant entamé -> "≈X" plutôt qu'un chiffre rond trompeur).
+ * contenant, jamais l'un sans l'autre, dès que la contenance unitaire est significative.
+ * Pour les liquides (unite 'l'), le détail devient "N contenants (dernier à X%)" plutôt qu'une
+ * quantité en L/mL/cL, jugée peu parlante pour ce type de produit (cf. formatLiquidQuantity).
  */
 export function formatQuantityDetailed(
   quantiteTotale: number,
   contenanceUnitaire: number,
   unite: Unit,
 ): string {
+  if (unite === 'l' && contenanceUnitaire > 0) {
+    return formatLiquidQuantity(quantiteTotale, contenanceUnitaire);
+  }
+
   const total = `${roundForDisplay(quantiteTotale)} ${UNIT_LABELS[unite]}`;
 
   // Une "contenance unitaire" n'apporte rien de plus quand l'unité EST déjà l'unité de compte

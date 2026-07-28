@@ -79,7 +79,7 @@ Cocher uniquement si le résultat attendu est observé tel quel.
 
 ## 8. Stock bas
 
-- [ ] Faire descendre la quantité d'une ligne en dessous du seuil par défaut de son unité (ex. moins de 0.3 L pour un produit en litres, moins de 100 g pour un produit en grammes, moins de 1 unité, moins de 15% restant) → le badge/indicateur visuel "Stock bas" apparaît sur cette ligne dans la liste d'inventaire.
+- [ ] Faire descendre la quantité d'une ligne en dessous du seuil par défaut de son unité (ex. moins d'1 contenant pour un produit en litres, moins de 100 g pour un produit en grammes, moins de 1 unité, moins de 15% restant) → le badge/indicateur visuel "Stock bas" apparaît sur cette ligne dans la liste d'inventaire.
 - [ ] Configurer un `seuil_alerte` personnalisé sur une ligne (différent du seuil par défaut de son unité) → l'indicateur "Stock bas" respecte ce seuil personnalisé et non plus le seuil par défaut.
 - [ ] Faire remonter la quantité au-dessus du seuil (nouvelle entrée) → le badge "Stock bas" disparaît immédiatement.
 - [ ] Vérifier le cas limite : quantité exactement égale au seuil (`quantite_totale === seuil`) → le badge doit s'afficher (comparaison `<=`, pas `<`), à confirmer visuellement que ce choix de bord est bien celui voulu.

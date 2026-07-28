@@ -105,7 +105,7 @@ describe('movementToRow', () => {
 });
 
 describe('listeCoursesItemToRow / rowToListeCoursesItem (aller-retour)', () => {
-  it('conserve toutes les valeurs apres un aller-retour item -> row -> item', () => {
+  it('conserve toutes les valeurs apres un aller-retour item -> row -> item (contenance_unitaire nulle)', () => {
     const item: ListeCoursesItem = {
       id: 'lc-1',
       nom: 'Courgette',
@@ -113,6 +113,22 @@ describe('listeCoursesItemToRow / rowToListeCoursesItem (aller-retour)', () => {
       categorie: 'legumes',
       quantite: 1,
       unite: 'unite',
+      contenance_unitaire: null,
+    };
+
+    const row = listeCoursesItemToRow(item);
+    expect(rowToListeCoursesItem(row)).toEqual(item);
+  });
+
+  it('conserve la contenance_unitaire pour un article liquide', () => {
+    const item: ListeCoursesItem = {
+      id: 'lc-2',
+      nom: 'Eau',
+      marque: 'Cristaline',
+      categorie: 'boissons',
+      quantite: 3,
+      unite: 'l',
+      contenance_unitaire: 1.5,
     };
 
     const row = listeCoursesItemToRow(item);

@@ -1,0 +1,29 @@
+.liquid-folder {
+  margin-bottom: var(--spacing-md);
+}
+
+.liquid-folder__title {
+  margin: var(--spacing-md) 0 var(--spacing-xs);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.liquid-folder__size-group {
+  margin-bottom: var(--spacing-sm);
+}
+
+.liquid-folder__size-title {
+  margin: 0 0 var(--spacing-xs);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+}
+
+.liquid-folder__items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
