@@ -107,6 +107,50 @@ export async function upsertInventoryLine(spreadsheetId: string, token: string, 
   });
 }
 
+interface SpreadsheetMetadataResponse {
+  sheets?: Array<{ properties?: { title?: string; sheetId?: number } }>;
+}
+
+/**
+ * Résout le sheetId numérique (requis par batchUpdate/deleteDimension, distinct du nom d'onglet
+ * utilisé partout ailleurs) en lisant les métadonnées du spreadsheet — jamais mis en cache : un
+ * appel supplémentaire par suppression, acceptable vu la fréquence rare de cette action.
+ */
+async function getSheetId(spreadsheetId: string, token: string, tabName: string): Promise<number> {
+  const response = await sheetsFetch(`${SHEETS_API_BASE}/${spreadsheetId}?fields=sheets.properties`, token);
+  const body = (await response.json()) as SpreadsheetMetadataResponse;
+  const sheet = body.sheets?.find((s) => s.properties?.title === tabName);
+  if (!sheet || sheet.properties?.sheetId === undefined) {
+    throw new Error(`Onglet "${tabName}" introuvable dans le spreadsheet.`);
+  }
+  return sheet.properties.sheetId;
+}
+
+/** Supprime définitivement la ligne portant cet id — jamais mis en file offline, cf. deleteArticle. */
+export async function deleteInventoryLine(spreadsheetId: string, token: string, id: string): Promise<void> {
+  const idColumnRange = `${SHEET_TAB_INVENTAIRE}!A:A`;
+  const idResponse = await sheetsFetch(valuesUrl(spreadsheetId, idColumnRange), token);
+  const idBody = (await idResponse.json()) as SheetsValuesResponse;
+  const idColumn = idBody.values ?? [];
+  const rowIndex = idColumn.findIndex((row, index) => index > 0 && row[0] === id);
+  if (rowIndex < 0) return;
+
+  const sheetId = await getSheetId(spreadsheetId, token, SHEET_TAB_INVENTAIRE);
+  await sheetsFetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [
+        {
+          deleteDimension: {
+            range: { sheetId, dimension: 'ROWS', startIndex: rowIndex, endIndex: rowIndex + 1 },
+          },
+        },
+      ],
+    }),
+  });
+}
+
 export async function appendMovement(spreadsheetId: string, token: string, movement: Movement): Promise<void> {
   await sheetsFetch(appendUrl(spreadsheetId, MOUVEMENTS_RANGE), token, {
     method: 'POST',

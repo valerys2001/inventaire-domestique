@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ArticleManager } from '../../components/ArticleManager/ArticleManager';
 import { useInventoryStore } from '../../store/inventoryStore';
 import '../../styles/Settings.css';
 
@@ -14,6 +15,7 @@ export function Settings() {
   const signOutGoogle = useInventoryStore((s) => s.signOutGoogle);
 
   const [spreadsheetId, setSpreadsheetId] = useState('');
+  const [showArticleManager, setShowArticleManager] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem(SPREADSHEET_ID_STORAGE_KEY);
@@ -61,6 +63,22 @@ export function Settings() {
             placeholder="ex: Alex"
           />
         </label>
+      </section>
+
+      <section className="settings__section">
+        <h2>Articles</h2>
+        <p className="settings__hint">
+          Corrige une erreur de première saisie (nom, marque, catégorie, contenance, unité, stock), ajoute ou
+          supprime un produit.
+        </p>
+        <button
+          type="button"
+          className="settings__button"
+          onClick={() => setShowArticleManager((v) => !v)}
+        >
+          {showArticleManager ? 'Masquer' : 'Modifier les articles'}
+        </button>
+        {showArticleManager && <ArticleManager />}
       </section>
 
       <section className="settings__section">

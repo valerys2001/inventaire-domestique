@@ -1,11 +1,18 @@
 import { create } from 'zustand';
 import type { Category, InventoryLine, ListeCoursesItem, MovementType, PendingOperation } from '@inventaire/shared';
-import { buildListeCoursesKey, resolveMerge, type CandidateEntry, type MergeDecision } from '@inventaire/shared';
-import { getCachedInventory, getCachedListeCourses, setCachedInventory, setCachedListeCourses } from '../services/localCache';
+import { buildListeCoursesKey, buildMergeKey, resolveMerge, type CandidateEntry, type MergeDecision } from '@inventaire/shared';
+import {
+  getCachedInventory,
+  getCachedListeCourses,
+  removePendingOperationsForCleFusion,
+  setCachedInventory,
+  setCachedListeCourses,
+} from '../services/localCache';
 import { enqueue, flush, getPendingCount } from '../services/offlineQueue';
 import {
   clearListeCourses,
   clearMovements,
+  deleteInventoryLine,
   fetchInventory,
   fetchListeCourses,
   upsertInventoryLine,
@@ -86,6 +93,25 @@ interface InventoryStoreState {
    * monde sans opt-in). Delta 0 : ceci ne change jamais la quantité.
    */
   updateThreshold: (cle_fusion: string, seuilAlerte: number | null) => Promise<void>;
+  /**
+   * Corrige n'importe quel champ descriptif d'un produit déjà enregistré (panneau "Modifier les
+   * articles" des réglages) : une erreur à la première saisie (scan mal catégorisé, contenance
+   * mal lue, saisie manuelle hâtive) doit pouvoir être corrigée sans ressaisir le produit. Si
+   * nom/marque/contenance_unitaire/unite changent, `cle_fusion` est recalculée (elle en dépend) ;
+   * si la nouvelle valeur entre en collision avec une AUTRE ligne existante, l'édition est
+   * refusée plutôt que de fusionner silencieusement deux lignes en une seule cle_fusion ambiguë.
+   */
+  updateArticle: (
+    id: string,
+    patch: Partial<Pick<InventoryLine, 'nom' | 'marque' | 'categorie' | 'contenance_unitaire' | 'unite' | 'quantite_totale'>>,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Supprime définitivement une ligne du Sheet (panneau "Modifier les articles"). Contrairement
+   * au reste de l'app, ce n'est PAS mis en file offline : une suppression est rare, délibérée, et
+   * doit échouer bruyamment plutôt que silencieusement si la connexion manque, plutôt que risquer
+   * de supprimer la mauvaise ligne après une resynchronisation tardive.
+   */
+  deleteArticle: (id: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   /** true dès qu'un jeton Google valide a été obtenu (silencieusement ou via un clic) — sert de
    * porte d'entrée à l'app : tant que false, l'UI n'affiche qu'un écran de connexion. */
   connected: boolean;
@@ -342,6 +368,84 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
     });
     await get().refreshPendingCount();
     void get().syncNow();
+  },
+
+  updateArticle: async (id, patch) => {
+    const state = get();
+    const target = state.lines.find((line) => line.id === id);
+    if (!target) return { ok: false, error: 'Produit introuvable.' };
+
+    const nom = patch.nom ?? target.nom;
+    const marque = patch.marque ?? target.marque;
+    const categorie = patch.categorie ?? target.categorie;
+    const contenance_unitaire = patch.contenance_unitaire ?? target.contenance_unitaire;
+    const unite = patch.unite ?? target.unite;
+    const quantite_totale = patch.quantite_totale ?? target.quantite_totale;
+
+    const cle_fusion = buildMergeKey(nom, marque, contenance_unitaire, unite);
+    const collision = state.lines.find((line) => line.id !== target.id && line.cle_fusion === cle_fusion);
+    if (collision) {
+      return {
+        ok: false,
+        error: `Un produit identique existe déjà ("${collision.nom} ${collision.marque}") — fusionnez-les plutôt que d'avoir deux fiches.`,
+      };
+    }
+
+    const nowIso = new Date().toISOString();
+    const utilisateur = state.utilisateur || 'local';
+    const delta = quantite_totale - target.quantite_totale;
+    const updatedLine: InventoryLine = {
+      ...target,
+      nom,
+      marque,
+      categorie,
+      contenance_unitaire,
+      unite,
+      quantite_totale,
+      cle_fusion,
+      date_maj: nowIso,
+      utilisateur,
+    };
+    set({ lines: state.lines.map((line) => (line.id === target.id ? updatedLine : line)) });
+
+    // cle_fusion AVANT édition : sert de pivot pour retrouver la ligne côté cache/serveur au
+    // flush (cf. applyOptimistic/flushOne) ; line_snapshot porte déjà la NOUVELLE cle_fusion.
+    await enqueue({
+      local_id: crypto.randomUUID(),
+      cle_fusion: target.cle_fusion,
+      line_snapshot: toLineSnapshot(updatedLine, utilisateur),
+      delta,
+      type: delta >= 0 ? 'entree_manuelle' : 'sortie',
+      utilisateur,
+      created_at: nowIso,
+    });
+    await get().refreshPendingCount();
+    void get().syncNow();
+    return { ok: true };
+  },
+
+  deleteArticle: async (id) => {
+    const state = get();
+    const target = state.lines.find((line) => line.id === id);
+    if (!target) return { ok: false, error: 'Produit introuvable.' };
+
+    try {
+      const spreadsheetId = getConfiguredSpreadsheetId();
+      let token = getCachedToken();
+      if (!token) token = await requestAccessToken(true);
+      await deleteInventoryLine(spreadsheetId, token, id);
+
+      const updatedLines = state.lines.filter((line) => line.id !== id);
+      await Promise.all([
+        setCachedInventory(updatedLines),
+        removePendingOperationsForCleFusion(target.cle_fusion),
+      ]);
+      set({ lines: updatedLines });
+      await get().refreshPendingCount();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'Suppression impossible.' };
+    }
   },
 
   signOutGoogle: () => {

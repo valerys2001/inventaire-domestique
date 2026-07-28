@@ -72,6 +72,17 @@ export async function removePendingOperation(localId: string): Promise<void> {
   await db.delete(STORE_PENDING, localId);
 }
 
+/**
+ * Purge les opérations en file visant un produit supprimé : sans ça, une édition faite hors-ligne
+ * juste avant une suppression pourrait, une fois reconnectée, réécrire la ligne effacée au flush.
+ */
+export async function removePendingOperationsForCleFusion(cle_fusion: string): Promise<void> {
+  const db = await getDb();
+  const all = await db.getAll(STORE_PENDING);
+  const stale = all.filter((op) => op.cle_fusion === cle_fusion);
+  await Promise.all(stale.map((op) => db.delete(STORE_PENDING, op.local_id)));
+}
+
 export async function getCachedListeCourses(): Promise<ListeCoursesItem[]> {
   const db = await getDb();
   return db.getAll(STORE_LISTE_COURSES);
