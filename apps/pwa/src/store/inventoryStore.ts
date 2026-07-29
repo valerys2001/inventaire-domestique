@@ -5,6 +5,7 @@ import {
   buildMergeKey,
   joinBarcodeEntries,
   parseBarcodeEntries,
+  resetNiveauDernierContenant,
   resolveMerge,
   upsertBarcodeCount,
   type BarcodeEntry,
@@ -60,6 +61,7 @@ function toLineSnapshot(line: InventoryLine, utilisateur: string): PendingOperat
     seuil_alerte: line.seuil_alerte,
     quantite_cible: line.quantite_cible,
     nombre_contenants_defaut: line.nombre_contenants_defaut,
+    niveau_dernier_contenant: line.niveau_dernier_contenant,
   };
 }
 
@@ -104,6 +106,12 @@ interface InventoryStoreState {
    * monde sans opt-in). Delta 0 : ceci ne change jamais la quantité.
    */
   updateThreshold: (cle_fusion: string, seuilAlerte: number | null) => Promise<void>;
+  /**
+   * Règle (ou retire, avec `null`) le niveau cosmétique du dernier contenant (onglet Sortie) :
+   * purement déclaratif, ne change jamais `quantite_totale` ni aucun calcul (cf.
+   * InventoryLine.niveau_dernier_contenant). Delta 0, comme `updateThreshold`.
+   */
+  updateNiveauDernierContenant: (cle_fusion: string, niveau: number | null) => Promise<void>;
   /**
    * Corrige n'importe quel champ descriptif d'un produit déjà enregistré (panneau "Modifier les
    * articles" des réglages) : une erreur à la première saisie (scan mal catégorisé, contenance
@@ -252,6 +260,14 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
         code_barre: candidate.code_barre
           ? upsertBarcodeCount(decision.target.code_barre, candidate.code_barre, candidate.nombre_contenants ?? null)
           : decision.target.code_barre,
+        // Un achat qui fait remonter le stock ne décrit plus "le dernier contenant" : le niveau
+        // cosmétique mémorisé (s'il y en avait un) n'a plus de sens et doit être oublié, pas
+        // traîné jusqu'au prochain passage à un seul contenant restant.
+        niveau_dernier_contenant: resetNiveauDernierContenant(
+          decision.nouvelle_quantite,
+          decision.target.contenance_unitaire,
+          decision.target.niveau_dernier_contenant,
+        ),
         date_maj: nowIso,
         utilisateur,
       };
@@ -277,6 +293,7 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
         seuil_alerte: null,
         quantite_cible: null,
         nombre_contenants_defaut: candidate.nombre_contenants ?? null,
+        niveau_dernier_contenant: null,
       };
       set({ lines: [...state.lines, newLine] });
       lineSnapshot = toLineSnapshot(newLine, utilisateur);
@@ -308,9 +325,17 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
     if (!target) return;
 
     const nowIso = new Date().toISOString();
+    const nouvelleQuantite = Math.max(0, target.quantite_totale + delta);
     const updatedLine: InventoryLine = {
       ...target,
-      quantite_totale: Math.max(0, target.quantite_totale + delta),
+      quantite_totale: nouvelleQuantite,
+      // Le dernier contenant vidé (0 en stock) n'est plus "le dernier contenant" à jauger : le
+      // niveau cosmétique n'a plus de sens, cf. resetNiveauDernierContenant.
+      niveau_dernier_contenant: resetNiveauDernierContenant(
+        nouvelleQuantite,
+        target.contenance_unitaire,
+        target.niveau_dernier_contenant,
+      ),
       date_maj: nowIso,
       utilisateur,
     };
@@ -409,6 +434,34 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
     void get().syncNow();
   },
 
+  updateNiveauDernierContenant: async (cle_fusion, niveau) => {
+    const state = get();
+    const target = state.lines.find((line) => line.cle_fusion === cle_fusion);
+    if (!target) return;
+
+    const nowIso = new Date().toISOString();
+    const utilisateur = state.utilisateur || 'local';
+    const updatedLine: InventoryLine = {
+      ...target,
+      niveau_dernier_contenant: niveau,
+      date_maj: nowIso,
+      utilisateur,
+    };
+    set({ lines: state.lines.map((line) => (line.id === target.id ? updatedLine : line)) });
+
+    await enqueue({
+      local_id: crypto.randomUUID(),
+      cle_fusion,
+      line_snapshot: toLineSnapshot(updatedLine, utilisateur),
+      delta: 0,
+      type: 'entree_manuelle',
+      utilisateur,
+      created_at: nowIso,
+    });
+    await get().refreshPendingCount();
+    void get().syncNow();
+  },
+
   updateArticle: async (id, patch) => {
     const state = get();
     const target = state.lines.find((line) => line.id === id);
@@ -445,6 +498,11 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
       quantite_totale,
       cle_fusion,
       nombre_contenants_defaut,
+      niveau_dernier_contenant: resetNiveauDernierContenant(
+        quantite_totale,
+        contenance_unitaire,
+        target.niveau_dernier_contenant,
+      ),
       date_maj: nowIso,
       utilisateur,
     };
@@ -512,10 +570,16 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
         barcode: entry.barcode,
         nombreContenants: entry.nombreContenants ?? line.nombre_contenants_defaut,
       }));
+    const nouvelleQuantite = survivor.quantite_totale + absorbed.quantite_totale;
     const updatedSurvivor: InventoryLine = {
       ...survivor,
-      quantite_totale: survivor.quantite_totale + absorbed.quantite_totale,
+      quantite_totale: nouvelleQuantite,
       code_barre: joinBarcodeEntries([...tagWithLineDefault(survivor), ...tagWithLineDefault(absorbed)]),
+      // Un niveau cosmétique mémorisé sur l'une des deux lignes d'origine décrivait SON dernier
+      // contenant à elle ; une fois les stocks cumulés, ce n'est plus forcément vrai (et devient
+      // ambigu s'il y en avait un des deux côtés). Repart de zéro (non suivi), remis en place au
+      // prochain passage à un seul contenant restant.
+      niveau_dernier_contenant: resetNiveauDernierContenant(nouvelleQuantite, survivor.contenance_unitaire, null),
       date_maj: nowIso,
       utilisateur,
     };

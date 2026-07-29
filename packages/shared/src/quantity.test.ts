@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { computeDeltaFromPack, formatContainerQuantity, formatQuantityDetailed, roundForDisplay } from './quantity';
+import {
+  computeDeltaFromPack,
+  formatContainerQuantity,
+  formatQuantityDetailed,
+  isLastContainerQuantity,
+  resetNiveauDernierContenant,
+  roundForDisplay,
+} from './quantity';
 
 describe('computeDeltaFromPack', () => {
   it('calcule 9 pour un pack de 6 bouteilles de 1.5 L', () => {
@@ -89,5 +96,52 @@ describe('formatContainerQuantity', () => {
 
   it('compte le dernier contenant entamé même à un stock très bas', () => {
     expect(formatContainerQuantity(0.1, 1.5, 'l')).toBe('1 contenant (0.1 litres, dernier à 7%)');
+  });
+
+  it("le niveau cosmétique fourni prime sur le reste dérivé du stock réel (toujours un compte entier de contenants)", () => {
+    // 1 contenant plein (compte réel, entier) mais niveau cosmétique mémorisé à 42% : le vrai
+    // compte de contenants ne change jamais, seul le % affiché vient du niveau cosmétique.
+    expect(formatContainerQuantity(1.5, 1.5, 'l', 42)).toBe('1 contenant (1.5 litres, dernier à 42%)');
+  });
+
+  it('niveau cosmétique null = non affiché, même sur le dernier contenant', () => {
+    expect(formatContainerQuantity(1.5, 1.5, 'l', null)).toBe('1 contenant (1.5 litres)');
+  });
+
+  it('niveau cosmétique absent (undefined) : retombe sur le % dérivé du stock réel', () => {
+    expect(formatContainerQuantity(0.1, 1.5, 'l')).toBe('1 contenant (0.1 litres, dernier à 7%)');
+  });
+});
+
+describe('isLastContainerQuantity', () => {
+  it("vrai quand il reste exactement un contenant (le cas d'usage du bug rapporté)", () => {
+    expect(isLastContainerQuantity(1.5, 1.5)).toBe(true);
+  });
+
+  it('vrai pour un dernier contenant entamé (moins qu\'un contenant plein)', () => {
+    expect(isLastContainerQuantity(0.5, 1.5)).toBe(true);
+  });
+
+  it("faux à 0 (plus aucun contenant) ou 2+ contenants (plus 'le dernier')", () => {
+    expect(isLastContainerQuantity(0, 1.5)).toBe(false);
+    expect(isLastContainerQuantity(3, 1.5)).toBe(false);
+  });
+
+  it('faux sans contenance renseignée', () => {
+    expect(isLastContainerQuantity(1, 0)).toBe(false);
+  });
+});
+
+describe('resetNiveauDernierContenant', () => {
+  it('conserve le niveau tant qu\'il ne reste qu\'un seul contenant', () => {
+    expect(resetNiveauDernierContenant(1.5, 1.5, 42)).toBe(42);
+  });
+
+  it("remet à null dès qu'un second contenant est acheté (plus plus 'le dernier')", () => {
+    expect(resetNiveauDernierContenant(3, 1.5, 42)).toBeNull();
+  });
+
+  it('remet à null une fois le dernier contenant totalement épuisé (0 en stock)', () => {
+    expect(resetNiveauDernierContenant(0, 1.5, 42)).toBeNull();
   });
 });

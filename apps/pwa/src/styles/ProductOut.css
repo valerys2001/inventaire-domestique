@@ -96,7 +96,8 @@
   font-weight: 600;
 }
 
-.product-out__threshold {
+.product-out__threshold,
+.product-out__gauge {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);

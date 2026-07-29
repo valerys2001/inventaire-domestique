@@ -39,7 +39,13 @@ export function Besoins() {
       <div className="besoins__item-meta">
         <span className="besoins__item-category">{CATEGORY_LABELS[line.categorie]}</span>
         <span className="besoins__item-qty">
-          {formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)} — seuil :{' '}
+          {formatQuantityDetailed(
+            line.quantite_totale,
+            line.contenance_unitaire,
+            line.unite,
+            line.niveau_dernier_contenant,
+          )}{' '}
+          — seuil :{' '}
           {line.seuil_alerte} {line.unite === 'l' ? `contenant${(line.seuil_alerte ?? 0) > 1 ? 's' : ''}` : UNIT_LABELS[line.unite]}
         </span>
       </div>

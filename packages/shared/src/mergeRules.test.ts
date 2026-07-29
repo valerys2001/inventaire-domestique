@@ -19,6 +19,7 @@ function makeLine(overrides: Partial<InventoryLine> = {}): InventoryLine {
     seuil_alerte: null,
     quantite_cible: null,
     nombre_contenants_defaut: null,
+    niveau_dernier_contenant: null,
     ...overrides,
   };
 }

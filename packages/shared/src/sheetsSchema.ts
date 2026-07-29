@@ -24,6 +24,7 @@ export const INVENTAIRE_COLUMNS = [
   'seuil_alerte',
   'quantite_cible',
   'nombre_contenants_defaut',
+  'niveau_dernier_contenant',
 ] as const;
 
 /** Ordre des colonnes de l'onglet Mouvements (journal append-only). */
@@ -40,7 +41,7 @@ export const LISTE_COURSES_COLUMNS = [
   'contenance_unitaire',
 ] as const;
 
-export const INVENTAIRE_RANGE = `${SHEET_TAB_INVENTAIRE}!A:N`;
+export const INVENTAIRE_RANGE = `${SHEET_TAB_INVENTAIRE}!A:O`;
 export const MOUVEMENTS_RANGE = `${SHEET_TAB_MOUVEMENTS}!A:F`;
 export const LISTE_COURSES_RANGE = `${SHEET_TAB_LISTE_COURSES}!A:G`;
 

@@ -88,7 +88,13 @@ export function InventoryList({ onSelectLine, onListeGenerated }: InventoryListP
             <span className="inventory-list__item-brand">{line.marque}</span>
           </div>
           <p className="inventory-list__build-current">
-            Actuel : {formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}
+            Actuel :{' '}
+            {formatQuantityDetailed(
+              line.quantite_totale,
+              line.contenance_unitaire,
+              line.unite,
+              line.niveau_dernier_contenant,
+            )}
           </p>
           <UnitSelector
             unite={line.unite}
@@ -117,7 +123,12 @@ export function InventoryList({ onSelectLine, onListeGenerated }: InventoryListP
           <div className="inventory-list__item-meta">
             <span className="inventory-list__item-category">{CATEGORY_LABELS[line.categorie]}</span>
             <span className={`inventory-list__item-qty${low ? ' inventory-list__item-qty--low' : ''}`}>
-              {formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}
+              {formatQuantityDetailed(
+                line.quantite_totale,
+                line.contenance_unitaire,
+                line.unite,
+                line.niveau_dernier_contenant,
+              )}
               {low && <span className="inventory-list__badge">Stock bas</span>}
             </span>
           </div>

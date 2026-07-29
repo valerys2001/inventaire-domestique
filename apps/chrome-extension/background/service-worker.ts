@@ -19,6 +19,7 @@ import {
   inventoryLineToRow,
   movementToRow,
   resolveMerge,
+  resetNiveauDernierContenant,
   parseQuantity,
   computeDeltaFromPack,
   lastColumnLetter,
@@ -175,6 +176,11 @@ async function importItems(spreadsheetId: string, items: ScrapedItem[], token: s
         ...decision.target,
         quantite_totale: decision.nouvelle_quantite,
         nombre_contenants_defaut: candidate.nombre_contenants ?? decision.target.nombre_contenants_defaut,
+        niveau_dernier_contenant: resetNiveauDernierContenant(
+          decision.nouvelle_quantite,
+          decision.target.contenance_unitaire,
+          decision.target.niveau_dernier_contenant,
+        ),
         date_maj: now,
       };
       await updateValues(
@@ -201,6 +207,7 @@ async function importItems(spreadsheetId: string, items: ScrapedItem[], token: s
         seuil_alerte: null,
         quantite_cible: null,
         nombre_contenants_defaut: candidate.nombre_contenants ?? null,
+        niveau_dernier_contenant: null,
       };
       const rowNumber = nextRow;
       nextRow += 1;

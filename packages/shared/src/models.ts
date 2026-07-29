@@ -29,6 +29,14 @@ export interface InventoryLine {
    * saisie (comme categorie/contenance_unitaire), jamais imposé.
    */
   nombre_contenants_defaut: number | null;
+  /**
+   * Niveau (0-100) du dernier contenant entamé, purement cosmétique : `null` = non suivi (stock
+   * plein ou plus d'un contenant restant). N'influence JAMAIS `quantite_totale` ni aucun calcul
+   * (seuils, listes de courses, stock bas) — `quantite_totale` reste toujours un compte ENTIER de
+   * contenants. Réglable dans l'onglet Sortie tant qu'il ne reste qu'un seul contenant ; remis à
+   * `null` dès qu'un second contenant est acheté (le champ ne s'applique qu'au DERNIER contenant).
+   */
+  niveau_dernier_contenant: number | null;
 }
 
 /** Ligne append-only de l'onglet `Mouvements` (journal / audit). */

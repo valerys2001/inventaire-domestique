@@ -59,13 +59,48 @@ export function computePackagedQuantityDisplay(
  * "6 contenants (8.2 L, dernier à 47%)". Toujours les deux informations à la fois — le compte de
  * contenants (ce qu'on manipule à l'achat/au rangement) ET la quantité brute totale (ce que
  * pèse/contient le stock réellement) — jamais l'une sans l'autre.
+ *
+ * `niveauDernierContenant` (0-100 ou null) est le niveau du dernier contenant mémorisé
+ * séparément (cf. InventoryLine.niveau_dernier_contenant, réglable dans Sortie) : purement
+ * cosmétique, il prime sur le reste calculé à partir de `quantiteTotale` (qui, lui, reste
+ * toujours un compte entier de contenants et ne doit jamais produire ce %). Absent/`undefined`,
+ * on retombe sur le reste dérivé de `quantiteTotale` (cas d'une quantité brute non arrondie
+ * saisie ailleurs que via Sortie, ex. le champ "précis").
  */
-export function formatContainerQuantity(quantiteTotale: number, contenanceUnitaire: number, unite: Unit): string {
+export function formatContainerQuantity(
+  quantiteTotale: number,
+  contenanceUnitaire: number,
+  unite: Unit,
+  niveauDernierContenant?: number | null,
+): string {
   const { lastContainerPercent, totalContainers } = computePackagedQuantityDisplay(quantiteTotale, contenanceUnitaire);
   const totalLabel = `${roundForDisplay(quantiteTotale)} ${UNIT_LABELS[unite]}`;
+  const percent = niveauDernierContenant !== undefined ? niveauDernierContenant : lastContainerPercent;
   const countLabel = `${totalContainers} contenant${totalContainers > 1 ? 's' : ''}`;
-  const detail = lastContainerPercent === null ? totalLabel : `${totalLabel}, dernier à ${lastContainerPercent}%`;
+  const detail = percent === null ? totalLabel : `${totalLabel}, dernier à ${percent}%`;
   return `${countLabel} (${detail})`;
+}
+
+/**
+ * Vrai quand il ne reste plus qu'un seul contenant (entier ou entamé) en stock — c'est la seule
+ * situation où `niveau_dernier_contenant` (cf. models.ts) a un sens : au-delà d'un contenant, ou
+ * à 0, ce niveau cosmétique doit être remis à `null` (cf. `resetNiveauDernierContenant`).
+ */
+export function isLastContainerQuantity(quantiteTotale: number, contenanceUnitaire: number): boolean {
+  return contenanceUnitaire > 0 && quantiteTotale > 0 && quantiteTotale <= contenanceUnitaire + 1e-6;
+}
+
+/**
+ * Remet `niveau_dernier_contenant` à `null` dès que le stock ne représente plus "un seul
+ * contenant restant" (remonté à 2+ contenants après un achat, ou totalement épuisé) : ce niveau
+ * ne décrit jamais que LE dernier contenant, jamais un état antérieur devenu obsolète.
+ */
+export function resetNiveauDernierContenant(
+  quantiteTotale: number,
+  contenanceUnitaire: number,
+  niveauActuel: number | null,
+): number | null {
+  return isLastContainerQuantity(quantiteTotale, contenanceUnitaire) ? niveauActuel : null;
 }
 
 /**
@@ -95,9 +130,10 @@ export function formatQuantityDetailed(
   quantiteTotale: number,
   contenanceUnitaire: number,
   unite: Unit,
+  niveauDernierContenant?: number | null,
 ): string {
   if ((unite === 'l' || unite === 'g') && contenanceUnitaire > 0) {
-    return formatContainerQuantity(quantiteTotale, contenanceUnitaire, unite);
+    return formatContainerQuantity(quantiteTotale, contenanceUnitaire, unite, niveauDernierContenant);
   }
 
   const total = `${roundForDisplay(quantiteTotale)} ${UNIT_LABELS[unite]}`;

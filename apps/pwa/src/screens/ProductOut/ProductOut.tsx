@@ -3,6 +3,7 @@ import {
   buildMergeKey,
   formatQuantityDetailed,
   groupLiquidLines,
+  isLastContainerQuantity,
   parseBarcodes,
   type Category,
   type InventoryLine,
@@ -21,8 +22,11 @@ interface ProductOutProps {
 }
 
 // Pour entretien/hygiène/boissons, "combien de bouteilles restantes" perd son sens une fois qu'il
-// n'en reste qu'une (ou moins) : mieux vaut jauger le niveau du dernier contenant en pourcentage
-// (ex. le dernier flacon de vinaigre passe de 100% à 50%) que de sauter directement de 1 à 0 unité.
+// n'en reste qu'une : mieux vaut jauger le niveau du dernier contenant en pourcentage (ex. le
+// dernier flacon de vinaigre passe de 100% à 50%) que de compter en fractions de contenant.
+// Purement cosmétique (cf. InventoryLine.niveau_dernier_contenant) : le stock réel (le "vrai
+// compte") reste toujours un nombre entier de contenants, géré par le stepper habituel plus bas —
+// cette jauge ne fait qu'annoter visuellement le dernier contenant, sans jamais y toucher.
 const GAUGE_CATEGORIES: Category[] = ['produits_entretien', 'cosmetiques_hygiene', 'boissons'];
 
 function isLastContainerGauge(line: InventoryLine): boolean {
@@ -30,8 +34,7 @@ function isLastContainerGauge(line: InventoryLine): boolean {
     GAUGE_CATEGORIES.includes(line.categorie) &&
     line.unite !== 'unite' &&
     line.unite !== 'pourcent' &&
-    line.contenance_unitaire > 0 &&
-    line.quantite_totale <= line.contenance_unitaire
+    isLastContainerQuantity(line.quantite_totale, line.contenance_unitaire)
   );
 }
 
@@ -39,12 +42,14 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
   const lines = useInventoryStore((s) => s.lines);
   const applyExit = useInventoryStore((s) => s.applyExit);
   const updateThreshold = useInventoryStore((s) => s.updateThreshold);
+  const updateNiveauDernierContenant = useInventoryStore((s) => s.updateNiveauDernierContenant);
   const utilisateur = useInventoryStore((s) => s.utilisateur);
 
   const [method, setMethod] = useState<'liste' | 'scan'>('liste');
   const [selectedCleFusion, setSelectedCleFusion] = useState<string | null>(initialCleFusion);
   const [amount, setAmount] = useState(0);
   const [gaugePercent, setGaugePercent] = useState(100);
+  const [gaugeSaved, setGaugeSaved] = useState(false);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<string | null>(null);
@@ -72,11 +77,11 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
   useEffect(() => {
     if (selectedLine) {
       setAmount(selectedLine.unite === 'unite' ? Math.min(1, selectedLine.quantite_totale) : selectedLine.contenance_unitaire || 0);
-      setGaugePercent(
-        selectedLine.contenance_unitaire > 0
-          ? Math.round((selectedLine.quantite_totale / selectedLine.contenance_unitaire) * 100)
-          : 100,
-      );
+      // Niveau cosmétique du dernier contenant : repart de 100% (plein, non entamé) quand rien
+      // n'est encore mémorisé pour cette ligne — jamais dérivé de quantite_totale (qui reste un
+      // compte entier de contenants et ne dit rien sur le niveau de remplissage).
+      setGaugePercent(selectedLine.niveau_dernier_contenant ?? 100);
+      setGaugeSaved(false);
       setThresholdInput(selectedLine.seuil_alerte !== null ? String(selectedLine.seuil_alerte) : '');
       setThresholdSaved(false);
     }
@@ -92,28 +97,28 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
     setTimeout(() => setThresholdSaved(false), 2000);
   };
 
+  const handleSaveGauge = async () => {
+    if (!selectedLine) return;
+    await updateNiveauDernierContenant(selectedLine.cle_fusion, gaugePercent);
+    setGaugeSaved(true);
+    setTimeout(() => setGaugeSaved(false), 2000);
+  };
+
   const clearSelection = () => {
     setSelectedCleFusion(null);
     setConfirmation(null);
     onConsumed?.();
   };
 
+  // Toujours le même retrait "en contenants entiers", jauge ou pas : le niveau cosmétique du
+  // dernier contenant (ci-dessus) ne touche jamais au stock réel, il s'enregistre indépendamment.
   const handleRetirer = async () => {
-    if (!selectedLine) return;
+    if (!selectedLine || amount <= 0) return;
 
-    if (useGauge) {
-      const newQuantity = (gaugePercent / 100) * selectedLine.contenance_unitaire;
-      const delta = newQuantity - selectedLine.quantite_totale;
-      if (delta >= 0) return; // la jauge n'a pas bougé (ou remontée, non permis en sortie)
-      await applyExit({ cle_fusion: selectedLine.cle_fusion, delta, utilisateur });
-      setConfirmation(`${selectedLine.nom} : dernier contenant descendu à ${gaugePercent}%`);
-    } else {
-      if (amount <= 0) return;
-      await applyExit({ cle_fusion: selectedLine.cle_fusion, delta: -amount, utilisateur });
-      setConfirmation(
-        `${formatQuantityDetailed(amount, selectedLine.contenance_unitaire, selectedLine.unite)} retiré(s) de ${selectedLine.nom}`,
-      );
-    }
+    await applyExit({ cle_fusion: selectedLine.cle_fusion, delta: -amount, utilisateur });
+    setConfirmation(
+      `${formatQuantityDetailed(amount, selectedLine.contenance_unitaire, selectedLine.unite)} retiré(s) de ${selectedLine.nom}`,
+    );
 
     setSelectedCleFusion(null);
     onConsumed?.();
@@ -196,7 +201,14 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
                   <span>
                     {line.nom} {line.marque}
                   </span>
-                  <span>{formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}</span>
+                  <span>
+                    {formatQuantityDetailed(
+                      line.quantite_totale,
+                      line.contenance_unitaire,
+                      line.unite,
+                      line.niveau_dernier_contenant,
+                    )}
+                  </span>
                 </button>
               </li>
             )}
@@ -212,7 +224,14 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
                   <span>
                     {line.nom} {line.marque}
                   </span>
-                  <span>{formatQuantityDetailed(line.quantite_totale, line.contenance_unitaire, line.unite)}</span>
+                  <span>
+                    {formatQuantityDetailed(
+                      line.quantite_totale,
+                      line.contenance_unitaire,
+                      line.unite,
+                      line.niveau_dernier_contenant,
+                    )}
+                  </span>
                 </button>
               </li>
             ))}
@@ -228,33 +247,43 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
           </h2>
           <p>
             En stock :{' '}
-            {formatQuantityDetailed(selectedLine.quantite_totale, selectedLine.contenance_unitaire, selectedLine.unite)}
+            {formatQuantityDetailed(
+              selectedLine.quantite_totale,
+              selectedLine.contenance_unitaire,
+              selectedLine.unite,
+              selectedLine.niveau_dernier_contenant,
+            )}
           </p>
-          {useGauge ? (
-            <>
-              <p className="product-out__gauge-hint">Dernier contenant — niveau restant :</p>
-              <UnitSelector unite="pourcent" value={gaugePercent} onChange={setGaugePercent} />
-            </>
-          ) : (
-            <UnitSelector
-              unite={selectedLine.unite}
-              value={amount}
-              onChange={setAmount}
-              contenanceUnitaire={selectedLine.contenance_unitaire}
-              baseValue={0}
-              maxCount={
-                selectedLine.contenance_unitaire > 0
-                  ? Math.floor(selectedLine.quantite_totale / selectedLine.contenance_unitaire + 1e-6)
-                  : undefined
-              }
-            />
-          )}
+          <UnitSelector
+            unite={selectedLine.unite}
+            value={amount}
+            onChange={setAmount}
+            contenanceUnitaire={selectedLine.contenance_unitaire}
+            baseValue={0}
+            maxCount={
+              selectedLine.contenance_unitaire > 0
+                ? Math.floor(selectedLine.quantite_totale / selectedLine.contenance_unitaire + 1e-6)
+                : undefined
+            }
+          />
           <button type="button" className="product-out__submit" onClick={handleRetirer}>
             Retirer
           </button>
           <button type="button" className="product-out__cancel" onClick={clearSelection}>
             Choisir un autre produit
           </button>
+
+          {useGauge && (
+            <div className="product-out__gauge">
+              {/* Purement cosmétique : ne change jamais le stock réel (ci-dessus), juste le niveau
+                  affiché du dernier contenant. Enregistrement indépendant du "Retirer". */}
+              <p className="product-out__gauge-hint">Dernier contenant — niveau restant (cosmétique) :</p>
+              <UnitSelector unite="pourcent" value={gaugePercent} onChange={setGaugePercent} />
+              <button type="button" className="product-out__cancel" onClick={handleSaveGauge}>
+                {gaugeSaved ? 'Enregistré ✓' : 'Enregistrer le niveau'}
+              </button>
+            </div>
+          )}
 
           <div className="product-out__threshold">
             <label className="product-out__field">

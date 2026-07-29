@@ -19,6 +19,7 @@ describe('inventoryLineToRow / rowToInventoryLine (aller-retour)', () => {
       seuil_alerte: 2,
       quantite_cible: 12,
       nombre_contenants_defaut: 6,
+      niveau_dernier_contenant: 42,
     };
 
     const row = inventoryLineToRow(line);
@@ -43,6 +44,7 @@ describe('inventoryLineToRow / rowToInventoryLine (aller-retour)', () => {
       seuil_alerte: null,
       quantite_cible: null,
       nombre_contenants_defaut: null,
+      niveau_dernier_contenant: null,
     };
 
     const row = inventoryLineToRow(line);
@@ -52,10 +54,11 @@ describe('inventoryLineToRow / rowToInventoryLine (aller-retour)', () => {
     expect(roundTripped.seuil_alerte).toBeNull();
     expect(roundTripped.quantite_cible).toBeNull();
     expect(roundTripped.nombre_contenants_defaut).toBeNull();
+    expect(roundTripped.niveau_dernier_contenant).toBeNull();
     expect(roundTripped).toEqual(line);
   });
 
-  it("respecte l'ordre des colonnes A:N (id en premiere position, nombre_contenants_defaut en derniere)", () => {
+  it("respecte l'ordre des colonnes A:O (id en premiere position, niveau_dernier_contenant en derniere)", () => {
     const line: InventoryLine = {
       id: 'id-1',
       nom: 'nom-1',
@@ -71,11 +74,12 @@ describe('inventoryLineToRow / rowToInventoryLine (aller-retour)', () => {
       seuil_alerte: 1,
       quantite_cible: 8,
       nombre_contenants_defaut: 4,
+      niveau_dernier_contenant: 55,
     };
 
     const row = inventoryLineToRow(line);
     expect(row[0]).toBe('id-1');
-    expect(row[row.length - 1]).toBe('4');
+    expect(row[row.length - 1]).toBe('55');
   });
 });
 

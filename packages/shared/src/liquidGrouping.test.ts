@@ -18,6 +18,7 @@ function line(overrides: Partial<InventoryLine>): InventoryLine {
     seuil_alerte: overrides.seuil_alerte ?? null,
     quantite_cible: overrides.quantite_cible ?? null,
     nombre_contenants_defaut: overrides.nombre_contenants_defaut ?? null,
+    niveau_dernier_contenant: overrides.niveau_dernier_contenant ?? null,
   };
 }
 
