@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react';
 import {
   CATEGORIES,
   CATEGORY_LABELS,
-  formatContainerQuantity,
   UNITS,
   UNIT_LABELS,
   type Category,
   type InventoryLine,
   type Unit,
 } from '@inventaire/shared';
+import { UnitSelector } from '../UnitSelector/UnitSelector';
 import { useInventoryStore } from '../../store/inventoryStore';
 import '../../styles/ArticleManager.css';
 
@@ -138,12 +138,15 @@ function ArticleFields({ values, onChange, quantiteLabel }: ArticleFieldsProps) 
       </div>
       <label className="article-manager__field">
         <span>{quantiteLabel}</span>
-        <input
-          type="number"
-          min={0}
-          step="0.01"
-          value={values.quantite_totale}
-          onChange={(e) => setField('quantite_totale', e.target.value)}
+        {/* Toujours par contenant, jamais un total brut à taper au clavier ("par unité, pas par
+            pack") — même stepper que Sortie/Construction de liste, contenanceUnitaire déclenche
+            le mode contenant pour l/g, ignoré (donc sans effet) pour les autres unités. */}
+        <UnitSelector
+          unite={values.unite}
+          value={Number(values.quantite_totale.replace(',', '.')) || 0}
+          onChange={(value) => setField('quantite_totale', String(value))}
+          contenanceUnitaire={Number(values.contenance_unitaire.replace(',', '.')) || undefined}
+          baseValue={0}
         />
       </label>
       <label className="article-manager__field">
@@ -157,16 +160,6 @@ function ArticleFields({ values, onChange, quantiteLabel }: ArticleFieldsProps) 
           placeholder="ex: 6"
         />
       </label>
-      {(values.unite === 'l' || values.unite === 'g') && Number(values.contenance_unitaire.replace(',', '.')) > 0 && (
-        <p className="article-manager__hint">
-          ≈{' '}
-          {formatContainerQuantity(
-            Number(values.quantite_totale.replace(',', '.')) || 0,
-            Number(values.contenance_unitaire.replace(',', '.')),
-            values.unite,
-          )}
-        </p>
-      )}
     </div>
   );
 }
@@ -182,6 +175,7 @@ export function ArticleManager() {
   const applyEntry = useInventoryStore((s) => s.applyEntry);
   const updateArticle = useInventoryStore((s) => s.updateArticle);
   const deleteArticle = useInventoryStore((s) => s.deleteArticle);
+  const mergeArticles = useInventoryStore((s) => s.mergeArticles);
 
   const [query, setQuery] = useState('');
   const [adding, setAdding] = useState(false);
@@ -191,6 +185,10 @@ export function ArticleManager() {
   const [editForm, setEditForm] = useState<ArticleFormValues>(EMPTY_FORM);
   const [editError, setEditError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Ligne en cours de "fusion" : on cherche l'AUTRE fiche (même produit sous un autre nom, ex.
+  // le pack de 6 face à la bouteille seule) avec laquelle réunir les stocks.
+  const [mergingLineId, setMergingLineId] = useState<string | null>(null);
+  const [mergeQuery, setMergeQuery] = useState('');
 
   const filteredLines = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -269,6 +267,48 @@ export function ArticleManager() {
     }
   };
 
+  const startMerge = (line: InventoryLine) => {
+    setMergingLineId(line.id);
+    setMergeQuery('');
+    setEditError(null);
+  };
+
+  const mergeCandidates = useMemo(() => {
+    const source = lines.find((l) => l.id === mergingLineId);
+    if (!source) return [];
+    const q = mergeQuery.trim().toLowerCase();
+    return lines
+      .filter((l) => l.id !== source.id && l.unite === source.unite)
+      .filter((l) => !q || `${l.nom} ${l.marque}`.toLowerCase().includes(q))
+      .sort((a, b) => a.nom.localeCompare(b.nom))
+      .slice(0, 20);
+  }, [lines, mergingLineId, mergeQuery]);
+
+  const handleMerge = async (target: InventoryLine) => {
+    const source = lines.find((l) => l.id === mergingLineId);
+    if (!source) return;
+    const confirmed = confirm(
+      `Fusionner "${source.nom} ${source.marque}" avec "${target.nom} ${target.marque}" ? Les stocks seront ` +
+        `additionnés dans "${target.nom} ${target.marque}", et "${source.nom} ${source.marque}" sera supprimé. ` +
+        'Action irréversible.',
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    setEditError(null);
+    try {
+      const result = await mergeArticles(target.id, source.id);
+      if (!result.ok) {
+        setEditError(result.error);
+        return;
+      }
+      setMergingLineId(null);
+      if (editingId === source.id) setEditingId(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="article-manager">
       <button
@@ -314,6 +354,9 @@ export function ArticleManager() {
                   <button type="button" className="article-manager__cancel" onClick={cancelEdit} disabled={busy}>
                     Annuler
                   </button>
+                  <button type="button" className="article-manager__cancel" onClick={() => startMerge(line)} disabled={busy}>
+                    Fusionner…
+                  </button>
                   <button
                     type="button"
                     className="article-manager__delete"
@@ -323,6 +366,49 @@ export function ArticleManager() {
                     Supprimer
                   </button>
                 </div>
+
+                {mergingLineId === line.id && (
+                  <div className="article-manager__merge">
+                    <p className="article-manager__hint">
+                      Choisissez le produit avec lequel réunir "{line.nom} {line.marque}" — même article sous un
+                      autre nom (ex. pack vs bouteille seule). Les stocks s'additionnent, "{line.nom} {line.marque}"
+                      est supprimé.
+                    </p>
+                    <input
+                      type="search"
+                      className="article-manager__search"
+                      placeholder="Rechercher le produit à fusionner…"
+                      value={mergeQuery}
+                      onChange={(e) => setMergeQuery(e.target.value)}
+                      autoFocus
+                    />
+                    <ul className="article-manager__merge-list">
+                      {mergeCandidates.map((candidate) => (
+                        <li key={candidate.id}>
+                          <button
+                            type="button"
+                            className="article-manager__merge-item"
+                            onClick={() => handleMerge(candidate)}
+                            disabled={busy}
+                          >
+                            <span>
+                              {candidate.nom} {candidate.marque}
+                            </span>
+                            <span className="article-manager__suggestion-meta">
+                              {candidate.contenance_unitaire} {UNIT_LABELS[candidate.unite]}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                      {mergeCandidates.length === 0 && (
+                        <li className="article-manager__empty">Aucun autre produit de même unité trouvé.</li>
+                      )}
+                    </ul>
+                    <button type="button" className="article-manager__cancel" onClick={() => setMergingLineId(null)}>
+                      Annuler la fusion
+                    </button>
+                  </div>
+                )}
               </>
             ) : (
               <div className="article-manager__item-summary">

@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import type { Category, InventoryLine, ListeCoursesItem, MovementType, PendingOperation } from '@inventaire/shared';
-import { buildListeCoursesKey, buildMergeKey, resolveMerge, type CandidateEntry, type MergeDecision } from '@inventaire/shared';
+import {
+  buildListeCoursesKey,
+  buildMergeKey,
+  joinBarcodes,
+  parseBarcodes,
+  resolveMerge,
+  type CandidateEntry,
+  type MergeDecision,
+} from '@inventaire/shared';
 import {
   getCachedInventory,
   getCachedListeCourses,
@@ -118,6 +126,15 @@ interface InventoryStoreState {
    * de supprimer la mauvaise ligne après une resynchronisation tardive.
    */
   deleteArticle: (id: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Fusionne deux fiches produit qui désignent en réalité le même article (ex: bouteille seule
+   * scannée sous un nom différent du pack de 6 de la même bouteille) : additionne leurs stocks,
+   * réunit leurs codes-barres (les deux scans retrouveront ensuite la fiche survivante) et
+   * supprime `absorbedId`. Refuse si les deux lignes n'ont pas la même unité (additionner des
+   * litres et des grammes n'a pas de sens). Comme deleteArticle, pas de file offline — la
+   * suppression de la ligne absorbée doit réussir immédiatement ou échouer bruyamment.
+   */
+  mergeArticles: (survivorId: string, absorbedId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   /** true dès qu'un jeton Google valide a été obtenu (silencieusement ou via un clic) — sert de
    * porte d'entrée à l'app : tant que false, l'UI n'affiche qu'un écran de connexion. */
   connected: boolean;
@@ -460,6 +477,49 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : 'Suppression impossible.' };
+    }
+  },
+
+  mergeArticles: async (survivorId, absorbedId) => {
+    const state = get();
+    if (survivorId === absorbedId) return { ok: false, error: 'Impossible de fusionner un produit avec lui-même.' };
+    const survivor = state.lines.find((line) => line.id === survivorId);
+    const absorbed = state.lines.find((line) => line.id === absorbedId);
+    if (!survivor || !absorbed) return { ok: false, error: 'Produit introuvable.' };
+    if (survivor.unite !== absorbed.unite) {
+      return { ok: false, error: `Unités différentes (${survivor.unite} / ${absorbed.unite}) : fusion impossible.` };
+    }
+
+    const nowIso = new Date().toISOString();
+    const utilisateur = state.utilisateur || 'local';
+    const updatedSurvivor: InventoryLine = {
+      ...survivor,
+      quantite_totale: survivor.quantite_totale + absorbed.quantite_totale,
+      code_barre: joinBarcodes([...parseBarcodes(survivor.code_barre), ...parseBarcodes(absorbed.code_barre)]),
+      date_maj: nowIso,
+      utilisateur,
+    };
+
+    try {
+      const spreadsheetId = getConfiguredSpreadsheetId();
+      let token = getCachedToken();
+      if (!token) token = await requestAccessToken(true);
+
+      await upsertInventoryLine(spreadsheetId, token, updatedSurvivor);
+      await deleteInventoryLine(spreadsheetId, token, absorbedId);
+
+      const updatedLines = state.lines
+        .filter((line) => line.id !== absorbedId)
+        .map((line) => (line.id === survivorId ? updatedSurvivor : line));
+      await Promise.all([
+        setCachedInventory(updatedLines),
+        removePendingOperationsForCleFusion(absorbed.cle_fusion),
+      ]);
+      set({ lines: updatedLines });
+      await get().refreshPendingCount();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'Fusion impossible.' };
     }
   },
 

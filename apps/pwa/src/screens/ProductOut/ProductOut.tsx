@@ -3,6 +3,7 @@ import {
   buildMergeKey,
   formatQuantityDetailed,
   groupLiquidLines,
+  parseBarcodes,
   type Category,
   type InventoryLine,
   UNIT_LABELS,
@@ -122,7 +123,7 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
     setScanBusy(true);
     setScanMessage(null);
     try {
-      let line = lines.find((l) => l.code_barre === barcode) ?? null;
+      let line = lines.find((l) => parseBarcodes(l.code_barre).includes(barcode)) ?? null;
 
       if (!line) {
         const result = await lookupProduct(barcode);

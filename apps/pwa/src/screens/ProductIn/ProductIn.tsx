@@ -7,6 +7,7 @@ import {
   UNIT_LABELS,
   computeDeltaFromPack,
   formatQuantityDetailed,
+  parseBarcodes,
   roundForDisplay,
   type Category,
   type InventoryLine,
@@ -121,7 +122,8 @@ export function ProductIn() {
           ? buildMergeKey(result.nom, result.marque, result.contenance_unitaire, result.unite)
           : null;
       const existing =
-        lines.find((l) => l.code_barre === barcode) ?? (cle ? lines.find((l) => l.cle_fusion === cle) : undefined);
+        lines.find((l) => parseBarcodes(l.code_barre).includes(barcode)) ??
+        (cle ? lines.find((l) => l.cle_fusion === cle) : undefined);
 
       setForm({
         nom: existing?.nom ?? result.nom ?? '',

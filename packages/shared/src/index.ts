@@ -4,5 +4,6 @@ export * from './mergeKey';
 export * from './mergeRules';
 export * from './quantity';
 export * from './liquidGrouping';
+export * from './barcodes';
 export * from './sheetsSchema';
 export * from './sheetsMapping';
