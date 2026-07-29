@@ -54,26 +54,18 @@ export function computePackagedQuantityDisplay(
   };
 }
 
-/** Ex: "6 contenants" ou "6 contenants (dernier à 47%)". Jamais de L/mL/cL, cf. demande utilisateur. */
-export function formatLiquidQuantity(quantiteTotale: number, contenanceUnitaire: number): string {
-  const { lastContainerPercent, totalContainers } = computePackagedQuantityDisplay(quantiteTotale, contenanceUnitaire);
-  if (totalContainers === 0) return '0 contenant';
-  const base = `${totalContainers} contenant${totalContainers > 1 ? 's' : ''}`;
-  return lastContainerPercent === null ? base : `${base} (dernier à ${lastContainerPercent}%)`;
-}
-
 /**
- * Ex: "12 × 60 grammes" ou "1 × 500 grammes (dernier à 40%)". Contrairement aux liquides, la
- * taille du contenant reste utile ici (un pot de 60 g et un de 125 g ne sont pas le même achat),
- * donc on la garde — mais on n'affiche JAMAIS le total agrégé seul ("720 g" ne veut rien dire
- * pour un lot de 12 pots) : c'est l'expression "N × taille" qui fait sens à l'achat, y compris
- * pour un seul contenant ("1 × 500 g", pas "500 g" tout seul).
+ * Ex: "2 contenants (3 L)" ou "3 contenants (300 grammes)" ou, contenant entamé,
+ * "6 contenants (8.2 L, dernier à 47%)". Toujours les deux informations à la fois — le compte de
+ * contenants (ce qu'on manipule à l'achat/au rangement) ET la quantité brute totale (ce que
+ * pèse/contient le stock réellement) — jamais l'une sans l'autre.
  */
-export function formatPackagedQuantity(quantiteTotale: number, contenanceUnitaire: number, unite: Unit): string {
+export function formatContainerQuantity(quantiteTotale: number, contenanceUnitaire: number, unite: Unit): string {
   const { lastContainerPercent, totalContainers } = computePackagedQuantityDisplay(quantiteTotale, contenanceUnitaire);
-  const sizeLabel = `${roundForDisplay(contenanceUnitaire)} ${UNIT_LABELS[unite]}`;
-  const base = `${totalContainers} × ${sizeLabel}`;
-  return lastContainerPercent === null ? base : `${base} (dernier à ${lastContainerPercent}%)`;
+  const totalLabel = `${roundForDisplay(quantiteTotale)} ${UNIT_LABELS[unite]}`;
+  const countLabel = `${totalContainers} contenant${totalContainers > 1 ? 's' : ''}`;
+  const detail = lastContainerPercent === null ? totalLabel : `${totalLabel}, dernier à ${lastContainerPercent}%`;
+  return `${countLabel} (${detail})`;
 }
 
 /**
@@ -95,22 +87,17 @@ export function stockComparableQuantity(line: {
 /**
  * "Un pack" ne veut rien dire tout seul : on affiche toujours le total ET le détail par
  * contenant, jamais l'un sans l'autre, dès que la contenance unitaire est significative.
- * Pour les liquides (unite 'l'), le détail devient "N contenants (dernier à X%)" plutôt qu'une
- * quantité en L/mL/cL, jugée peu parlante pour ce type de produit (cf. formatLiquidQuantity).
- * Pour les produits solides conditionnés (unite 'g' — pots de yaourt, crème...), le total agrégé
- * seul (ex. "720 g" pour 12 pots) n'est pas plus parlant : "12 × 60 g" prime (cf.
- * formatPackagedQuantity), y compris pour un seul contenant ("1 × 500 g").
+ * Pour les liquides et solides conditionnés (unite 'l'/'g' — bouteilles, pots de yaourt...), le
+ * détail devient "N contenants (X L/g)" (cf. formatContainerQuantity) : le compte de contenants
+ * ET la quantité brute totale, toujours les deux ensemble.
  */
 export function formatQuantityDetailed(
   quantiteTotale: number,
   contenanceUnitaire: number,
   unite: Unit,
 ): string {
-  if (unite === 'l' && contenanceUnitaire > 0) {
-    return formatLiquidQuantity(quantiteTotale, contenanceUnitaire);
-  }
-  if (unite === 'g' && contenanceUnitaire > 0) {
-    return formatPackagedQuantity(quantiteTotale, contenanceUnitaire, unite);
+  if ((unite === 'l' || unite === 'g') && contenanceUnitaire > 0) {
+    return formatContainerQuantity(quantiteTotale, contenanceUnitaire, unite);
   }
 
   const total = `${roundForDisplay(quantiteTotale)} ${UNIT_LABELS[unite]}`;

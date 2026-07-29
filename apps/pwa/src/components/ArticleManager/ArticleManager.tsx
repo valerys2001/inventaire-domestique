@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   CATEGORIES,
   CATEGORY_LABELS,
-  formatLiquidQuantity,
-  formatPackagedQuantity,
+  formatContainerQuantity,
   UNITS,
   UNIT_LABELS,
   type Category,
@@ -158,22 +157,13 @@ function ArticleFields({ values, onChange, quantiteLabel }: ArticleFieldsProps) 
           placeholder="ex: 6"
         />
       </label>
-      {values.unite === 'l' && Number(values.contenance_unitaire.replace(',', '.')) > 0 && (
+      {(values.unite === 'l' || values.unite === 'g') && Number(values.contenance_unitaire.replace(',', '.')) > 0 && (
         <p className="article-manager__hint">
           ≈{' '}
-          {formatLiquidQuantity(
+          {formatContainerQuantity(
             Number(values.quantite_totale.replace(',', '.')) || 0,
             Number(values.contenance_unitaire.replace(',', '.')),
-          )}
-        </p>
-      )}
-      {values.unite === 'g' && Number(values.contenance_unitaire.replace(',', '.')) > 0 && (
-        <p className="article-manager__hint">
-          ≈{' '}
-          {formatPackagedQuantity(
-            Number(values.quantite_totale.replace(',', '.')) || 0,
-            Number(values.contenance_unitaire.replace(',', '.')),
-            'g',
+            values.unite,
           )}
         </p>
       )}

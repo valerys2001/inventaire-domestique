@@ -19,6 +19,9 @@ export function ListeCourses() {
     [listeCourses],
   );
 
+  // Le regroupement par dossier (groupLiquidLines) reste volontairement réservé aux liquides
+  // (décision produit distincte, pas encore étendue aux solides conditionnés) ; le mode
+  // "contenants + précis" de l'éditeur de quantité, lui, s'applique aussi au 'g' ci-dessous.
   const otherItems = useMemo(() => visibleItems.filter((item) => item.unite !== 'l'), [visibleItems]);
   const liquidFolders = useMemo(
     () => groupLiquidLines(visibleItems.filter((item) => item.unite === 'l')),
@@ -44,12 +47,12 @@ export function ListeCourses() {
           unite={item.unite}
           value={item.quantite}
           contenanceUnitaire={item.contenance_unitaire ?? undefined}
-          baseValue={item.unite === 'l' ? 0 : undefined}
+          baseValue={item.unite === 'l' || item.unite === 'g' ? 0 : undefined}
           onChange={(value) => updateShoppingListItem(item.id, value)}
         />
       ) : (
         <span className="liste-courses__item-qty">
-          {item.unite === 'l'
+          {item.unite === 'l' || item.unite === 'g'
             ? formatQuantityDetailed(item.quantite, item.contenance_unitaire ?? 0, item.unite)
             : `${item.quantite} ${UNIT_LABELS[item.unite]}`}
         </span>

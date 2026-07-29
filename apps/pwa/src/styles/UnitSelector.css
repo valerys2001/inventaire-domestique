@@ -55,3 +55,53 @@
   width: 100%;
   height: var(--tap-target);
 }
+
+.unit-selector--dual {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--spacing-sm);
+}
+
+.unit-selector__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.unit-selector__row--precise {
+  gap: var(--spacing-sm);
+}
+
+.unit-selector__precise-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  flex: 0 0 auto;
+}
+
+.unit-selector__precise-unit {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  flex: 0 0 auto;
+}
+
+.unit-selector__button--small {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+}
+
+.unit-selector__input--precise {
+  width: 90px;
+  height: 36px;
+  text-align: center;
+  font-size: 15px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  flex: 1;
+  min-width: 0;
+}

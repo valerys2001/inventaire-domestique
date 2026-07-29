@@ -58,31 +58,70 @@ export function UnitSelector({ unite, value, onChange, contenanceUnitaire, baseV
       onChange(roundForDisplay(baseValue + clamped * contenanceUnitaire));
     };
 
+    // Le stepper par contenant reste l'action principale, mais un ajustement fin en litres/
+    // grammes reste utile (ex: retirer 1,7 L précisément) — les deux visibles en permanence,
+    // jamais l'un sans l'autre, et toujours synchronisés sur la même valeur.
+    const preciseMax = maxCount !== undefined ? baseValue + maxCount * contenanceUnitaire : Infinity;
+    const preciseStep = STEP_BY_UNIT[unite];
+
     return (
-      <div className="unit-selector unit-selector--stepper">
-        <button
-          type="button"
-          className="unit-selector__button"
-          onClick={() => setBeyondBase(beyondBase - 1)}
-          disabled={beyondBase <= 0}
-          aria-label="Diminuer"
-        >
-          −
-        </button>
-        <span className="unit-selector__value unit-selector__value--liquid">
-          {unite === 'g'
-            ? `${totalCount} × ${roundForDisplay(contenanceUnitaire)} ${UNIT_LABELS.g}`
-            : `${totalCount} contenant${totalCount > 1 ? 's' : ''}`}
-        </span>
-        <button
-          type="button"
-          className="unit-selector__button"
-          onClick={() => setBeyondBase(beyondBase + 1)}
-          disabled={maxCount !== undefined && beyondBase >= maxCount}
-          aria-label="Augmenter"
-        >
-          +
-        </button>
+      <div className="unit-selector unit-selector--dual">
+        <div className="unit-selector__row">
+          <button
+            type="button"
+            className="unit-selector__button"
+            onClick={() => setBeyondBase(beyondBase - 1)}
+            disabled={beyondBase <= 0}
+            aria-label="Diminuer"
+          >
+            −
+          </button>
+          <span className="unit-selector__value unit-selector__value--liquid">
+            {unite === 'g'
+              ? `${totalCount} × ${roundForDisplay(contenanceUnitaire)} ${UNIT_LABELS.g}`
+              : `${totalCount} contenant${totalCount > 1 ? 's' : ''}`}
+          </span>
+          <button
+            type="button"
+            className="unit-selector__button"
+            onClick={() => setBeyondBase(beyondBase + 1)}
+            disabled={maxCount !== undefined && beyondBase >= maxCount}
+            aria-label="Augmenter"
+          >
+            +
+          </button>
+        </div>
+        <div className="unit-selector__row unit-selector__row--precise">
+          <span className="unit-selector__precise-label">Précis</span>
+          <button
+            type="button"
+            className="unit-selector__button unit-selector__button--small"
+            onClick={() => onChange(clamp(roundStep(value - preciseStep), baseValue, preciseMax))}
+            aria-label="Diminuer (précis)"
+          >
+            −
+          </button>
+          <input
+            type="number"
+            min={baseValue}
+            max={maxCount !== undefined ? preciseMax : undefined}
+            step={preciseStep}
+            value={value}
+            onChange={(e) => onChange(clamp(Number(e.target.value), baseValue, preciseMax))}
+            className="unit-selector__input unit-selector__input--precise"
+            inputMode="decimal"
+            aria-label={`Quantité précise (${UNIT_LABELS[unite]})`}
+          />
+          <span className="unit-selector__precise-unit">{UNIT_LABELS[unite]}</span>
+          <button
+            type="button"
+            className="unit-selector__button unit-selector__button--small"
+            onClick={() => onChange(clamp(roundStep(value + preciseStep), baseValue, preciseMax))}
+            aria-label="Augmenter (précis)"
+          >
+            +
+          </button>
+        </div>
       </div>
     );
   }
