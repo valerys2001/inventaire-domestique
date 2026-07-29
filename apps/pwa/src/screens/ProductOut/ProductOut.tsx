@@ -62,8 +62,11 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
     [lines, selectedCleFusion],
   );
   const useGauge = selectedLine !== null && isLastContainerGauge(selectedLine);
-  const otherLines = useMemo(() => lines.filter((line) => line.unite !== 'l'), [lines]);
-  const liquidFolders = useMemo(() => groupLiquidLines(lines), [lines]);
+  // On ne peut rien retirer d'un produit à 0 en stock : l'exclure évite de noyer la liste avec
+  // des articles épuisés qui n'ont rien à faire dans un écran de SORTIE.
+  const inStockLines = useMemo(() => lines.filter((line) => line.quantite_totale > 0), [lines]);
+  const otherLines = useMemo(() => inStockLines.filter((line) => line.unite !== 'l'), [inStockLines]);
+  const liquidFolders = useMemo(() => groupLiquidLines(inStockLines), [inStockLines]);
 
   useEffect(() => {
     if (selectedLine) {
@@ -106,7 +109,9 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
     } else {
       if (amount <= 0) return;
       await applyExit({ cle_fusion: selectedLine.cle_fusion, delta: -amount, utilisateur });
-      setConfirmation(`${amount} ${UNIT_LABELS[selectedLine.unite]} retiré(s) de ${selectedLine.nom}`);
+      setConfirmation(
+        `${formatQuantityDetailed(amount, selectedLine.contenance_unitaire, selectedLine.unite)} retiré(s) de ${selectedLine.nom}`,
+      );
     }
 
     setSelectedCleFusion(null);
@@ -210,7 +215,7 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
                 </button>
               </li>
             ))}
-            {lines.length === 0 && <li className="product-out__empty">Aucun produit en stock.</li>}
+            {inStockLines.length === 0 && <li className="product-out__empty">Aucun produit en stock.</li>}
           </ul>
         </>
       )}
@@ -230,7 +235,18 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
               <UnitSelector unite="pourcent" value={gaugePercent} onChange={setGaugePercent} />
             </>
           ) : (
-            <UnitSelector unite={selectedLine.unite} value={amount} onChange={setAmount} />
+            <UnitSelector
+              unite={selectedLine.unite}
+              value={amount}
+              onChange={setAmount}
+              contenanceUnitaire={selectedLine.contenance_unitaire}
+              baseValue={0}
+              maxCount={
+                selectedLine.contenance_unitaire > 0
+                  ? Math.floor(selectedLine.quantite_totale / selectedLine.contenance_unitaire + 1e-6)
+                  : undefined
+              }
+            />
           )}
           <button type="button" className="product-out__submit" onClick={handleRetirer}>
             Retirer
