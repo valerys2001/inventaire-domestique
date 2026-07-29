@@ -40,8 +40,42 @@ describe('parseQuantity', () => {
     expect(parseQuantity('1,5 l')).toEqual({ contenanceUnitaire: 1.5, unite: 'l' });
   });
 
-  it('retombe sur l unite "unite" quand le token n est pas reconnu', () => {
-    expect(parseQuantity('4')).toEqual({ contenanceUnitaire: 4, unite: 'unite' });
+  it('un nombre sans poids/volume reconnu devient un lot de N unités, pas un contenant de taille N', () => {
+    // Ex: papier toilette "12 rouleaux" -> 12 rouleaux qu'on peut retirer un par un, pas UN
+    // article géant de "taille 12".
+    expect(parseQuantity('4')).toEqual({
+      contenanceUnitaire: 1,
+      unite: 'unite',
+      nombreContenants: 4,
+      deltaPack: 4,
+    });
+    expect(parseQuantity('12 rouleaux')).toEqual({
+      contenanceUnitaire: 1,
+      unite: 'unite',
+      nombreContenants: 12,
+      deltaPack: 12,
+    });
+  });
+
+  it('tolère "×" et "*" comme séparateur de pack, et le préfixe "Pack de"/"Lot de"', () => {
+    expect(parseQuantity('6×1,5l')).toEqual({
+      contenanceUnitaire: 1.5,
+      unite: 'l',
+      nombreContenants: 6,
+      deltaPack: 9,
+    });
+    expect(parseQuantity('6*1,5l')).toEqual({
+      contenanceUnitaire: 1.5,
+      unite: 'l',
+      nombreContenants: 6,
+      deltaPack: 9,
+    });
+    expect(parseQuantity('Pack de 6 x 1,5 l')).toEqual({
+      contenanceUnitaire: 1.5,
+      unite: 'l',
+      nombreContenants: 6,
+      deltaPack: 9,
+    });
   });
 
   it('renvoie null pour un format non reconnu', () => {

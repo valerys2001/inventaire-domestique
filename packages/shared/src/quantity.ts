@@ -113,8 +113,13 @@ export interface ParsedQuantity {
 }
 
 const NUMBER = '\\d+(?:[.,]\\d+)?';
-const PACK_RE = new RegExp(`^(${NUMBER})\\s*x\\s*(${NUMBER})\\s*([a-zµ%]*)$`, 'i');
+// Séparateur "x" toléré sous plusieurs graphies rencontrées en pratique (Open*Facts, saisie
+// manuelle, import Chronodrive) : "x"/"X" ASCII, "×" signe multiplication, "*" astérisque.
+const PACK_RE = new RegExp(`^(${NUMBER})\\s*[x×*]\\s*(${NUMBER})\\s*([a-zµ%]*)$`, 'i');
 const SIMPLE_RE = new RegExp(`^(${NUMBER})\\s*([a-zµ%]*)$`, 'i');
+// Préfixe français fréquent devant un pack ("Pack de 6 x 1,5 L", "Lot de 12") : ignoré avant le
+// matching, il ne change pas la quantité elle-même.
+const PACK_PREFIX_RE = /^(?:pack|lot|carton)\s+de\s+/i;
 
 function convertUnit(value: number, token: string): { value: number; unit: Unit } | null {
   if (!Number.isFinite(value) || value <= 0) return null;
@@ -149,7 +154,12 @@ function convertUnit(value: number, token: string): { value: number; unit: Unit 
  * ou l'appelant demandera alors la contenance manuellement).
  */
 export function parseQuantity(raw: string): ParsedQuantity | null {
-  const normalized = raw.trim().toLowerCase().replace(',', '.').replace(/\s+/g, ' ');
+  const normalized = raw
+    .trim()
+    .toLowerCase()
+    .replace(PACK_PREFIX_RE, '')
+    .replace(',', '.')
+    .replace(/\s+/g, ' ');
 
   const packMatch = normalized.match(PACK_RE);
   if (packMatch) {
@@ -171,6 +181,20 @@ export function parseQuantity(raw: string): ParsedQuantity | null {
     const rawValue = parseFloat(simpleMatch[1]);
     const converted = convertUnit(rawValue, simpleMatch[2]);
     if (!converted) return null;
+
+    if (converted.unit === 'unite') {
+      // Pas de poids/volume reconnu (ex: "12 rouleaux", "4 sachets", ou un simple "4") : ce
+      // nombre décrit COMBIEN d'articles individuels sont dans le lot, pas la taille d'UN gros
+      // contenant. Un article compté à l'unité fait toujours 1 unité ; le nombre lu devient le
+      // nombre de contenants, pour pouvoir baisser le stock un par un (ex. rouleau par rouleau)
+      // plutôt que de tout retirer d'un coup.
+      return {
+        contenanceUnitaire: 1,
+        unite: 'unite',
+        nombreContenants: converted.value,
+        deltaPack: converted.value,
+      };
+    }
 
     return { contenanceUnitaire: converted.value, unite: converted.unit };
   }
