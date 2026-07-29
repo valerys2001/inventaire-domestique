@@ -16,6 +16,7 @@ import {
 import { BarcodeScanner } from '../../components/BarcodeScanner/BarcodeScanner';
 import { lookupProduct } from '../../services/productLookup';
 import { MergeConfirmDialog } from '../../components/MergeConfirmDialog/MergeConfirmDialog';
+import { UnitSelector } from '../../components/UnitSelector/UnitSelector';
 import { useInventoryStore } from '../../store/inventoryStore';
 import '../../styles/ProductIn.css';
 
@@ -380,12 +381,10 @@ export function ProductIn() {
 
           <label className="product-in__field">
             <span>Nombre de contenants (pack)</span>
-            <input
-              type="number"
-              min={1}
-              step="1"
-              value={form.nombre_contenants}
-              onChange={(e) => updateForm({ nombre_contenants: e.target.value })}
+            <UnitSelector
+              unite="unite"
+              value={Number(form.nombre_contenants) || 1}
+              onChange={(value) => updateForm({ nombre_contenants: String(Math.max(1, value)) })}
             />
           </label>
 
