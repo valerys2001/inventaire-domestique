@@ -150,7 +150,11 @@ function ArticleFields({ values, onChange, quantiteLabel }: ArticleFieldsProps) 
         />
       </label>
       <label className="article-manager__field">
-        <span>Nombre de contenants mémorisé pour ce code-barres (pack) — vide = non mémorisé</span>
+        <span>
+          Nombre de contenants par défaut pour cette ligne — vide = non mémorisé. Si plusieurs codes-barres sont
+          fusionnés sur cette ligne (pack + bouteille seule…), chacun garde son propre conditionnement au scan ;
+          cette valeur ne sert que de repli pour un code-barres jamais vu.
+        </span>
         <input
           type="number"
           min={0}

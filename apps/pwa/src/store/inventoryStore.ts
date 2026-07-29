@@ -3,9 +3,11 @@ import type { Category, InventoryLine, ListeCoursesItem, MovementType, PendingOp
 import {
   buildListeCoursesKey,
   buildMergeKey,
-  joinBarcodes,
-  parseBarcodes,
+  joinBarcodeEntries,
+  parseBarcodeEntries,
   resolveMerge,
+  upsertBarcodeCount,
+  type BarcodeEntry,
   type CandidateEntry,
   type MergeDecision,
 } from '@inventaire/shared';
@@ -244,6 +246,12 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
         // une correction faite au second scan doit s'appliquer immédiatement, pas seulement à un
         // hypothétique troisième scan.
         nombre_contenants_defaut: candidate.nombre_contenants ?? decision.target.nombre_contenants_defaut,
+        // Mémorise aussi ce nombre de contenants pour CET EAN précis (pas seulement au niveau de
+        // la ligne) : si la ligne porte plusieurs EAN fusionnés (pack + bouteille seule), corriger
+        // le conditionnement d'un EAN ne doit jamais écraser celui d'un autre EAN de la même ligne.
+        code_barre: candidate.code_barre
+          ? upsertBarcodeCount(decision.target.code_barre, candidate.code_barre, candidate.nombre_contenants ?? null)
+          : decision.target.code_barre,
         date_maj: nowIso,
         utilisateur,
       };
@@ -260,7 +268,9 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
         contenance_unitaire: candidate.contenance_unitaire,
         unite: candidate.unite,
         quantite_totale: candidate.delta,
-        code_barre: candidate.code_barre ?? null,
+        code_barre: candidate.code_barre
+          ? upsertBarcodeCount(null, candidate.code_barre, candidate.nombre_contenants ?? null)
+          : null,
         date_maj: nowIso,
         utilisateur,
         cle_fusion: decision.cle_fusion,
@@ -492,10 +502,20 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
 
     const nowIso = new Date().toISOString();
     const utilisateur = state.utilisateur || 'local';
+    // Chaque EAN garde SON conditionnement propre après fusion (ex: l'EAN du pack de 6 reste "6",
+    // l'EAN de la bouteille seule reste "1") : un EAN déjà associé à un nombre de contenants
+    // explicite le conserve, sinon il hérite du nombre de contenants par défaut de SA ligne
+    // d'origine (jamais de celle de l'autre produit fusionné) — cf. principe de fusion "les
+    // comptes se cumulent, la spécificité de chaque code-barre au scan est préservée".
+    const tagWithLineDefault = (line: InventoryLine): BarcodeEntry[] =>
+      parseBarcodeEntries(line.code_barre).map((entry) => ({
+        barcode: entry.barcode,
+        nombreContenants: entry.nombreContenants ?? line.nombre_contenants_defaut,
+      }));
     const updatedSurvivor: InventoryLine = {
       ...survivor,
       quantite_totale: survivor.quantite_totale + absorbed.quantite_totale,
-      code_barre: joinBarcodes([...parseBarcodes(survivor.code_barre), ...parseBarcodes(absorbed.code_barre)]),
+      code_barre: joinBarcodeEntries([...tagWithLineDefault(survivor), ...tagWithLineDefault(absorbed)]),
       date_maj: nowIso,
       utilisateur,
     };

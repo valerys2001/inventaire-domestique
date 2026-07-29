@@ -7,6 +7,7 @@ import {
   UNIT_LABELS,
   computeDeltaFromPack,
   formatQuantityDetailed,
+  getNombreContenantsForBarcode,
   parseBarcodes,
   roundForDisplay,
   type Category,
@@ -121,9 +122,18 @@ export function ProductIn() {
         result.nom && result.marque && result.contenance_unitaire && result.unite
           ? buildMergeKey(result.nom, result.marque, result.contenance_unitaire, result.unite)
           : null;
-      const existing =
-        lines.find((l) => parseBarcodes(l.code_barre).includes(barcode)) ??
-        (cle ? lines.find((l) => l.cle_fusion === cle) : undefined);
+      const existingByBarcode = lines.find((l) => parseBarcodes(l.code_barre).includes(barcode));
+      const existing = existingByBarcode ?? (cle ? lines.find((l) => l.cle_fusion === cle) : undefined);
+
+      // Le conditionnement mémorisé (nombre de contenants) est propre à CET EAN, jamais à la
+      // ligne entière : après une fusion pack <-> bouteille seule, les deux EAN partagent la même
+      // ligne (même stock) mais doivent garder chacun leur conditionnement propre au rescan (cf.
+      // barcodes.ts). Si cet EAN précis a déjà un conditionnement mémorisé, on le reprend ; sinon
+      // (EAN jamais vu pour ce produit) on retombe sur le défaut au niveau de la ligne, comme
+      // avant, faute de mieux.
+      const nombreContenantsMemorise = existingByBarcode
+        ? getNombreContenantsForBarcode(existingByBarcode.code_barre, barcode)
+        : (existing?.nombre_contenants_defaut ?? null);
 
       setForm({
         nom: existing?.nom ?? result.nom ?? '',
@@ -131,11 +141,11 @@ export function ProductIn() {
         categorie: existing?.categorie ?? result.categorie_suggeree ?? CATEGORIES[0],
         contenance_unitaire: String(existing?.contenance_unitaire ?? result.contenance_unitaire ?? ''),
         unite: existing?.unite ?? result.unite ?? 'unite',
-        // Priorité à ce qui a déjà été corrigé pour CE code-barres (mémorisé sur la ligne
-        // existante) sur la détection brute Open*Facts, souvent absente/fausse pour les packs
-        // (ex. papier toilette, canettes) : sinon l'utilisateur devrait retaper "6" à chaque scan.
-        nombre_contenants: existing?.nombre_contenants_defaut
-          ? String(existing.nombre_contenants_defaut)
+        // Priorité à ce qui a déjà été corrigé pour CE code-barres précis sur la détection brute
+        // Open*Facts, souvent absente/fausse pour les packs (ex. papier toilette, canettes) :
+        // sinon l'utilisateur devrait retaper "6" à chaque scan.
+        nombre_contenants: nombreContenantsMemorise
+          ? String(nombreContenantsMemorise)
           : result.nombre_contenants
             ? String(result.nombre_contenants)
             : '1',
