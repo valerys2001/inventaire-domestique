@@ -159,6 +159,7 @@ async function importItems(spreadsheetId: string, items: ScrapedItem[], token: s
       unite,
       delta,
       code_barre: null,
+      nombre_contenants: parsed?.nombreContenants ?? null,
     };
 
     // Logique de fusion/cumul partagée avec la PWA et le scan (packages/shared) :
@@ -173,6 +174,7 @@ async function importItems(spreadsheetId: string, items: ScrapedItem[], token: s
       const updatedLine: InventoryLine = {
         ...decision.target,
         quantite_totale: decision.nouvelle_quantite,
+        nombre_contenants_defaut: candidate.nombre_contenants ?? decision.target.nombre_contenants_defaut,
         date_maj: now,
       };
       await updateValues(
@@ -198,6 +200,7 @@ async function importItems(spreadsheetId: string, items: ScrapedItem[], token: s
         cle_fusion: decision.cle_fusion,
         seuil_alerte: null,
         quantite_cible: null,
+        nombre_contenants_defaut: candidate.nombre_contenants ?? null,
       };
       const rowNumber = nextRow;
       nextRow += 1;

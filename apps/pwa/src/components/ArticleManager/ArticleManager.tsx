@@ -19,6 +19,7 @@ interface ArticleFormValues {
   contenance_unitaire: string;
   unite: Unit;
   quantite_totale: string;
+  nombre_contenants_defaut: string;
 }
 
 const EMPTY_FORM: ArticleFormValues = {
@@ -28,6 +29,7 @@ const EMPTY_FORM: ArticleFormValues = {
   contenance_unitaire: '1',
   unite: 'unite',
   quantite_totale: '0',
+  nombre_contenants_defaut: '',
 };
 
 function lineToFormValues(line: InventoryLine): ArticleFormValues {
@@ -38,6 +40,7 @@ function lineToFormValues(line: InventoryLine): ArticleFormValues {
     contenance_unitaire: String(line.contenance_unitaire),
     unite: line.unite,
     quantite_totale: String(line.quantite_totale),
+    nombre_contenants_defaut: line.nombre_contenants_defaut !== null ? String(line.nombre_contenants_defaut) : '',
   };
 }
 
@@ -48,6 +51,7 @@ interface ParsedArticle {
   contenance_unitaire: number;
   unite: Unit;
   quantite_totale: number;
+  nombre_contenants_defaut: number | null;
 }
 
 function parseForm(values: ArticleFormValues): { ok: true; value: ParsedArticle } | { ok: false; error: string } {
@@ -56,6 +60,15 @@ function parseForm(values: ArticleFormValues): { ok: true; value: ParsedArticle 
   if (!(contenance_unitaire > 0)) return { ok: false, error: 'La contenance doit être un nombre positif.' };
   const quantite_totale = Number(values.quantite_totale.replace(',', '.'));
   if (!(quantite_totale >= 0)) return { ok: false, error: 'La quantité ne peut pas être négative.' };
+
+  let nombre_contenants_defaut: number | null = null;
+  const nombreContenantsRaw = values.nombre_contenants_defaut.trim();
+  if (nombreContenantsRaw !== '') {
+    nombre_contenants_defaut = Number(nombreContenantsRaw.replace(',', '.'));
+    if (!(nombre_contenants_defaut > 0)) {
+      return { ok: false, error: 'Le nombre de contenants mémorisé doit être un nombre positif (ou vide).' };
+    }
+  }
 
   return {
     ok: true,
@@ -66,6 +79,7 @@ function parseForm(values: ArticleFormValues): { ok: true; value: ParsedArticle 
       contenance_unitaire,
       unite: values.unite,
       quantite_totale,
+      nombre_contenants_defaut,
     },
   };
 }
@@ -132,6 +146,17 @@ function ArticleFields({ values, onChange, quantiteLabel }: ArticleFieldsProps) 
           onChange={(e) => setField('quantite_totale', e.target.value)}
         />
       </label>
+      <label className="article-manager__field">
+        <span>Nombre de contenants mémorisé pour ce code-barres (pack) — vide = non mémorisé</span>
+        <input
+          type="number"
+          min={0}
+          step="1"
+          value={values.nombre_contenants_defaut}
+          onChange={(e) => setField('nombre_contenants_defaut', e.target.value)}
+          placeholder="ex: 6"
+        />
+      </label>
       {values.unite === 'l' && Number(values.contenance_unitaire.replace(',', '.')) > 0 && (
         <p className="article-manager__hint">
           ≈{' '}
@@ -192,7 +217,12 @@ export function ArticleManager() {
     setBusy(true);
     setAddError(null);
     try {
-      await applyEntry({ ...parsed.value, delta: parsed.value.quantite_totale, code_barre: null });
+      await applyEntry({
+        ...parsed.value,
+        delta: parsed.value.quantite_totale,
+        code_barre: null,
+        nombre_contenants: parsed.value.nombre_contenants_defaut,
+      });
       setAddForm(EMPTY_FORM);
       setAdding(false);
     } finally {

@@ -20,6 +20,7 @@ export function rowToInventoryLine(row: string[]): InventoryLine {
     cle_fusion: get('cle_fusion'),
     seuil_alerte: get('seuil_alerte') ? Number(get('seuil_alerte')) : null,
     quantite_cible: get('quantite_cible') ? Number(get('quantite_cible')) : null,
+    nombre_contenants_defaut: get('nombre_contenants_defaut') ? Number(get('nombre_contenants_defaut')) : null,
   };
 }
 

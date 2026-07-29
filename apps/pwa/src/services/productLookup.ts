@@ -1,10 +1,10 @@
-import { parseQuantity, type Category, type ProductLookupResult } from '@inventaire/shared';
+import { normalize, parseQuantity, type Category, type ProductLookupResult } from '@inventaire/shared';
 
 export { parseQuantity };
 
 const FETCH_TIMEOUT_MS = 5000;
 
-type LookupSource = Exclude<ProductLookupResult['source'], 'manuel'>;
+export type LookupSource = Exclude<ProductLookupResult['source'], 'manuel'>;
 
 interface SourceConfig {
   source: LookupSource;
@@ -21,7 +21,7 @@ const SOURCES: SourceConfig[] = [
 ];
 
 /** Sous-ensemble des champs Open*Facts réellement utilisés, le reste de la charge utile est ignoré. */
-interface OpenFactsProduct {
+export interface OpenFactsProduct {
   product_name?: string | null;
   brands?: string | null;
   quantity?: string | null;
@@ -127,45 +127,158 @@ function firstBrand(brands: string | null | undefined): string | null {
   return first ? first : null;
 }
 
+// Open*Facts renvoie des tags structurés en anglais (categories_tags, déjà couverts) MAIS le
+// champ libre `categories` est très souvent en français pour les produits français peu/mal
+// taggés — d'où un mot-clé français à côté de chaque mot-clé anglais, jamais l'un sans l'autre.
+// Les mots courts ambigus (ex. "vin", "eau", "sale") sont évités : ils apparaissent en préfixe
+// de mots sans rapport ("vinaigre", "veau", "salade") et provoqueraient un mauvais classement -
+// on préfère la forme plus longue ou le pluriel qui ne collisionne pas (cf. tests).
 const HYGIENE_KEYWORDS = [
   'cosmetic',
+  'cosmetique',
+  'cosmetiques',
   'hygiene',
   'shampoo',
+  'shampooing',
+  'shampooings',
   'soap',
+  'savon',
+  'savons',
   'toothpaste',
+  'dentifrice',
+  'dentifrices',
   'deodorant',
+  'deodorants',
   'skin-care',
   'shower-gel',
   'perfume',
+  'parfum',
+  'parfums',
   'body-care',
 ];
 const CLEANING_KEYWORDS = [
   'cleaning',
   'detergent',
+  'lessive',
+  'lessives',
   'laundry',
   'household',
   'dish-washing',
+  'vaisselle',
   'disinfectant',
+  'desinfectant',
+  'desinfectants',
+  'nettoyant',
+  'nettoyants',
+  'nettoyage',
   'entretien',
   'menage',
 ];
-const FRUIT_KEYWORDS = ['fruit'];
-const VEGETABLE_KEYWORDS = ['vegetable', 'legume'];
-const FRESH_KEYWORDS = ['dairies', 'dairy', 'fresh', 'meat', 'fish', 'cheese', 'yogurt', 'yoghurt', 'milk', 'charcuterie'];
+const FRUIT_KEYWORDS = ['fruit', 'fruits'];
+const VEGETABLE_KEYWORDS = ['vegetable', 'vegetables', 'legume', 'legumes'];
+const FRESH_KEYWORDS = [
+  'dairies',
+  'dairy',
+  'fresh',
+  'frais',
+  'meat',
+  'viande',
+  'viandes',
+  'fish',
+  'poisson',
+  'poissons',
+  'cheese',
+  'fromage',
+  'fromages',
+  'yogurt',
+  'yoghurt',
+  'yaourt',
+  'yaourts',
+  'milk',
+  'lait',
+  'laitier',
+  'laitiers',
+  'charcuterie',
+];
 // Eau, soda, jus, vin, bière... vont dans "Boissons", pas "Épicerie sucrée" (une boisson n'est
 // pas un produit sucré). Testé AVANT les mots-clés sucré/salé pour éviter tout chevauchement
 // (ex. "sweetened-beverages" contient "sweet" mais doit rester une boisson).
-const BEVERAGE_KEYWORDS = ['beverages', 'waters', 'water', 'sodas', 'soda', 'juice', 'wine', 'wines', 'beer', 'beers', 'alcohol', 'alcoholic-beverages'];
-const SWEET_KEYWORDS = ['sugar', 'sweet', 'chocolate', 'biscuit', 'cake', 'candies', 'dessert'];
+const BEVERAGE_KEYWORDS = [
+  'beverages',
+  'boisson',
+  'boissons',
+  'waters',
+  'water',
+  'eaux', // pas "eau" seul : préfixe de "veau" (viande) et autres faux positifs
+  'sodas',
+  'soda',
+  'juice',
+  'jus',
+  'wine',
+  'wines',
+  'vins', // pas "vin" seul : préfixe de "vinaigre"
+  'beer',
+  'beers',
+  'biere',
+  'bieres',
+  'alcohol',
+  'alcool',
+  'alcools',
+  'alcoholic-beverages',
+  'sirop',
+  'sirops',
+];
+const SWEET_KEYWORDS = [
+  'sugar',
+  'sucre',
+  'sucres',
+  'sucree',
+  'sucrees',
+  'sweet',
+  'chocolate',
+  'chocolat',
+  'chocolats',
+  'biscuit',
+  'cake',
+  'gateau',
+  'gateaux',
+  'candies',
+  'confiserie',
+  'confiseries',
+  'bonbon',
+  'bonbons',
+  'dessert',
+];
 // La soupe est salée, pas sucrée, même si "canned" est un indice ambigu par ailleurs.
-const SALTY_KEYWORDS = ['salty', 'snack', 'chips', 'pasta', 'rice', 'canned', 'sauces', 'condiment', 'soup', 'soups', 'soupe'];
-const FINE_KEYWORDS = ['gourmet', 'foie-gras', 'caviar', 'truffle', 'fine-grocery'];
+const SALTY_KEYWORDS = [
+  'salty',
+  'salee', // pas "sale" seul : préfixe de "salade" (légume/frais, pas épicerie salée)
+  'salees',
+  'snack',
+  'chips',
+  'pasta',
+  'pates',
+  'rice',
+  'riz',
+  'canned',
+  'conserve',
+  'conserves',
+  'sauces',
+  'sauce',
+  'condiment',
+  'condiments',
+  'soup',
+  'soups',
+  'soupe',
+  'soupes',
+];
+const FINE_KEYWORDS = ['gourmet', 'gastronomie', 'foie-gras', 'caviar', 'truffle', 'truffe', 'truffes', 'fine-grocery'];
 
 /**
  * Heuristique simple de catégorisation : suggestion seulement, jamais imposée.
  * L'utilisateur confirme/corrige toujours la catégorie dans l'UI.
  */
-function suggestCategory(source: LookupSource, product: OpenFactsProduct): Category | null {
+export function suggestCategory(source: LookupSource, product: OpenFactsProduct): Category | null {
   const tags = collectTags(product);
 
   if (source === 'open-beauty-facts' || matchesAny(tags, HYGIENE_KEYWORDS)) return 'cosmetiques_hygiene';
@@ -189,14 +302,16 @@ function collectTags(product: OpenFactsProduct): string[] {
   if (Array.isArray(product.categories_tags)) {
     for (const tag of product.categories_tags) {
       if (typeof tag === 'string') {
-        tags.push(tag.split(':').pop()!.toLowerCase());
+        tags.push(normalize(tag.split(':').pop()!));
       }
     }
   }
 
   if (typeof product.categories === 'string') {
     for (const category of product.categories.split(',')) {
-      tags.push(category.trim().toLowerCase());
+      // Le champ libre `categories` est souvent en français accentué ("Épicerie salée") : sans
+      // ce retrait d'accents, aucun mot-clé ASCII ("epicerie", "salee"...) ne pourrait matcher.
+      tags.push(normalize(category));
     }
   }
 

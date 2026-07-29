@@ -23,6 +23,7 @@ export const INVENTAIRE_COLUMNS = [
   'cle_fusion',
   'seuil_alerte',
   'quantite_cible',
+  'nombre_contenants_defaut',
 ] as const;
 
 /** Ordre des colonnes de l'onglet Mouvements (journal append-only). */
@@ -39,7 +40,7 @@ export const LISTE_COURSES_COLUMNS = [
   'contenance_unitaire',
 ] as const;
 
-export const INVENTAIRE_RANGE = `${SHEET_TAB_INVENTAIRE}!A:M`;
+export const INVENTAIRE_RANGE = `${SHEET_TAB_INVENTAIRE}!A:N`;
 export const MOUVEMENTS_RANGE = `${SHEET_TAB_MOUVEMENTS}!A:F`;
 export const LISTE_COURSES_RANGE = `${SHEET_TAB_LISTE_COURSES}!A:G`;
 

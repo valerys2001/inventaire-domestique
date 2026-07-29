@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseQuantity } from './productLookup';
+import { parseQuantity, suggestCategory, type OpenFactsProduct } from './productLookup';
 
 describe('parseQuantity', () => {
   it('parse un pack "6 x 1.5 l" en 6 contenants de 1.5 L (delta_pack = 9)', () => {
@@ -90,5 +90,56 @@ describe('parseQuantity', () => {
 
   it('renvoie null pour un pack avec un nombre de contenants nul', () => {
     expect(parseQuantity('0 x 1.5 l')).toBeNull();
+  });
+});
+
+function product(overrides: Partial<OpenFactsProduct> = {}): OpenFactsProduct {
+  return { product_name: null, brands: null, quantity: null, ...overrides };
+}
+
+describe('suggestCategory', () => {
+  it('classe une eau en boissons via le champ categories en français accentué (pas de tags structurés)', () => {
+    // Cas réel : produit mal tagué sur Open Food Facts, seul le champ libre `categories` existe,
+    // et il est en français ("Eaux de source" contient un accent sur "Épicerie" par ex ailleurs).
+    expect(suggestCategory('open-food-facts', product({ categories: 'Boissons, Eaux, Eaux de source' }))).toBe(
+      'boissons',
+    );
+  });
+
+  it('classe un vin en boissons sans confondre avec du vinaigre', () => {
+    expect(suggestCategory('open-food-facts', product({ categories: 'Boissons alcoolisées, Vins, Vins rouges' }))).toBe(
+      'boissons',
+    );
+    expect(suggestCategory('open-food-facts', product({ categories: 'Condiments, Vinaigres' }))).not.toBe('boissons');
+  });
+
+  it('ne confond pas une salade (frais/légume) avec de l\'épicerie salée', () => {
+    expect(suggestCategory('open-food-facts', product({ categories: 'Salades, Légumes' }))).not.toBe('epicerie_salee');
+  });
+
+  it('ne confond pas du veau (viande) avec de l\'eau', () => {
+    expect(suggestCategory('open-food-facts', product({ categories: 'Viandes, Veau' }))).not.toBe('boissons');
+  });
+
+  it('classe via les tags structurés categories_tags (anglais, langue-préfixée)', () => {
+    expect(
+      suggestCategory('open-food-facts', product({ categories_tags: ['en:beverages', 'en:waters', 'en:spring-waters'] })),
+    ).toBe('boissons');
+  });
+
+  it('classe un produit entretien via mots-clés français (lessive, nettoyant)', () => {
+    expect(suggestCategory('open-products-facts', product({ categories: 'Entretien de la maison, Lessives' }))).toBe(
+      'produits_entretien',
+    );
+  });
+
+  it('classe un produit hygiène via mots-clés français (savon, shampooing)', () => {
+    expect(suggestCategory('open-beauty-facts', product({ categories: 'Hygiène, Savons' }))).toBe(
+      'cosmetiques_hygiene',
+    );
+  });
+
+  it('renvoie null quand aucun indice ne matche', () => {
+    expect(suggestCategory('open-food-facts', product({ categories: 'Un texte quelconque sans rapport' }))).toBeNull();
   });
 });

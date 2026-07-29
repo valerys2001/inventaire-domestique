@@ -49,6 +49,7 @@ function toLineSnapshot(line: InventoryLine, utilisateur: string): PendingOperat
     cle_fusion: line.cle_fusion,
     seuil_alerte: line.seuil_alerte,
     quantite_cible: line.quantite_cible,
+    nombre_contenants_defaut: line.nombre_contenants_defaut,
   };
 }
 
@@ -103,7 +104,12 @@ interface InventoryStoreState {
    */
   updateArticle: (
     id: string,
-    patch: Partial<Pick<InventoryLine, 'nom' | 'marque' | 'categorie' | 'contenance_unitaire' | 'unite' | 'quantite_totale'>>,
+    patch: Partial<
+      Pick<
+        InventoryLine,
+        'nom' | 'marque' | 'categorie' | 'contenance_unitaire' | 'unite' | 'quantite_totale' | 'nombre_contenants_defaut'
+      >
+    >,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   /**
    * Supprime définitivement une ligne du Sheet (panneau "Modifier les articles"). Contrairement
@@ -216,6 +222,11 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
       const updatedLine: InventoryLine = {
         ...decision.target,
         quantite_totale: decision.nouvelle_quantite,
+        // Contrairement aux autres champs descriptifs (ignorés en fusion, cf. règle 3bis), celui-ci
+        // est explicitement mis à jour à chaque saisie : c'est tout l'intérêt de la mémorisation —
+        // une correction faite au second scan doit s'appliquer immédiatement, pas seulement à un
+        // hypothétique troisième scan.
+        nombre_contenants_defaut: candidate.nombre_contenants ?? decision.target.nombre_contenants_defaut,
         date_maj: nowIso,
         utilisateur,
       };
@@ -238,6 +249,7 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
         cle_fusion: decision.cle_fusion,
         seuil_alerte: null,
         quantite_cible: null,
+        nombre_contenants_defaut: candidate.nombre_contenants ?? null,
       };
       set({ lines: [...state.lines, newLine] });
       lineSnapshot = toLineSnapshot(newLine, utilisateur);
@@ -381,6 +393,8 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
     const contenance_unitaire = patch.contenance_unitaire ?? target.contenance_unitaire;
     const unite = patch.unite ?? target.unite;
     const quantite_totale = patch.quantite_totale ?? target.quantite_totale;
+    const nombre_contenants_defaut =
+      patch.nombre_contenants_defaut !== undefined ? patch.nombre_contenants_defaut : target.nombre_contenants_defaut;
 
     const cle_fusion = buildMergeKey(nom, marque, contenance_unitaire, unite);
     const collision = state.lines.find((line) => line.id !== target.id && line.cle_fusion === cle_fusion);
@@ -403,6 +417,7 @@ export const useInventoryStore = create<InventoryStoreState>((set, get) => ({
       unite,
       quantite_totale,
       cle_fusion,
+      nombre_contenants_defaut,
       date_maj: nowIso,
       utilisateur,
     };

@@ -11,6 +11,8 @@ export interface CandidateEntry {
   /** Quantité déjà exprimée dans `unite` (ex: pack déjà "explosé" en amont par l'agent Scan). */
   delta: number;
   code_barre?: string | null;
+  /** Cf. InventoryLine.nombre_contenants_defaut. Absent = ne pas modifier la valeur mémorisée. */
+  nombre_contenants?: number | null;
 }
 
 export type MergeDecision =

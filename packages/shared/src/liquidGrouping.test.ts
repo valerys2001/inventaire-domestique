@@ -17,6 +17,7 @@ function line(overrides: Partial<InventoryLine>): InventoryLine {
     cle_fusion: overrides.cle_fusion ?? 'eau|marque x|1.5|l',
     seuil_alerte: overrides.seuil_alerte ?? null,
     quantite_cible: overrides.quantite_cible ?? null,
+    nombre_contenants_defaut: overrides.nombre_contenants_defaut ?? null,
   };
 }
 

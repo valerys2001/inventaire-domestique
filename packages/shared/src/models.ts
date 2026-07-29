@@ -21,6 +21,14 @@ export interface InventoryLine {
    * au moment de "Générer la liste" (cible - quantite_totale, si positif).
    */
   quantite_cible: number | null;
+  /**
+   * Nombre de contenants mémorisé pour ce produit (ex: 6 pour "pack de 6 canettes de 33cl"),
+   * réutilisé pour préremplir le champ "Nombre de contenants" au prochain scan du même
+   * code-barres — sans ça, un pack sans info de conditionnement exploitable côté Open*Facts
+   * retombe sur 1 à chaque scan et l'utilisateur doit recorriger indéfiniment. Écrit à chaque
+   * saisie (comme categorie/contenance_unitaire), jamais imposé.
+   */
+  nombre_contenants_defaut: number | null;
 }
 
 /** Ligne append-only de l'onglet `Mouvements` (journal / audit). */

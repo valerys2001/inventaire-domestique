@@ -33,15 +33,16 @@ docs/qa-checklist.md    Checklist de recette manuelle.
 
 **Onglet `Inventaire`**
 
-| A | B | C | D | E | F | G | H | I | J | K | L | M |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| id | nom | marque | categorie | contenance_unitaire | unite | quantite_totale | code_barre | date_maj | utilisateur | cle_fusion | seuil_alerte | quantite_cible |
+| A | B | C | D | E | F | G | H | I | J | K | L | M | N |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| id | nom | marque | categorie | contenance_unitaire | unite | quantite_totale | code_barre | date_maj | utilisateur | cle_fusion | seuil_alerte | quantite_cible | nombre_contenants_defaut |
 
 - `categorie` : une des 9 valeurs figées — `epicerie_fine`, `epicerie_salee`, `epicerie_sucree`, `fruits`, `legumes`, `produits_frais`, `boissons`, `cosmetiques_hygiene`, `produits_entretien`.
 - `unite` : `unite`, `g`, `l`, `m`, ou `pourcent`.
 - `cle_fusion` : renseignée automatiquement par l'app à chaque écriture — ne pas éditer à la main.
 - `seuil_alerte` : optionnel (laisser vide pour utiliser le seuil par défaut de l'unité). Pour `unite = l`, exprimé en **nombre de contenants** (ex. `1` = alerte dès qu'il ne reste plus qu'un contenant), pas en litres.
 - `quantite_cible` : optionnel, brouillon du mode "Construction de liste" — laisser vide.
+- `nombre_contenants_defaut` : optionnel, mémorise le nombre de contenants d'un pack pour ce produit (ex. `6` pour un pack de 6 canettes) — préremplit automatiquement le formulaire au scan suivant du même code-barres. Laisser vide au départ, l'app le renseigne toute seule dès la première correction.
 
 **Onglet `Mouvements`** (journal, append-only — sert d'audit pour les cas de synchronisation concurrente)
 

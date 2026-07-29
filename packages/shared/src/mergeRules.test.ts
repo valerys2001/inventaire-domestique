@@ -18,6 +18,7 @@ function makeLine(overrides: Partial<InventoryLine> = {}): InventoryLine {
     cle_fusion: buildMergeKey('Eau', 'Marque X', 1.5, 'l'),
     seuil_alerte: null,
     quantite_cible: null,
+    nombre_contenants_defaut: null,
     ...overrides,
   };
 }

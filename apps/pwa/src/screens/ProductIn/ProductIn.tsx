@@ -128,7 +128,14 @@ export function ProductIn() {
         categorie: existing?.categorie ?? result.categorie_suggeree ?? CATEGORIES[0],
         contenance_unitaire: String(existing?.contenance_unitaire ?? result.contenance_unitaire ?? ''),
         unite: existing?.unite ?? result.unite ?? 'unite',
-        nombre_contenants: result.nombre_contenants ? String(result.nombre_contenants) : '1',
+        // Priorité à ce qui a déjà été corrigé pour CE code-barres (mémorisé sur la ligne
+        // existante) sur la détection brute Open*Facts, souvent absente/fausse pour les packs
+        // (ex. papier toilette, canettes) : sinon l'utilisateur devrait retaper "6" à chaque scan.
+        nombre_contenants: existing?.nombre_contenants_defaut
+          ? String(existing.nombre_contenants_defaut)
+          : result.nombre_contenants
+            ? String(result.nombre_contenants)
+            : '1',
         code_barre: result.code_barre,
         isKnownProduct: Boolean(existing) || result.source !== 'manuel',
       });
@@ -175,7 +182,7 @@ export function ProductIn() {
       categorie: line.categorie,
       contenance_unitaire: String(line.contenance_unitaire),
       unite: line.unite,
-      nombre_contenants: '1',
+      nombre_contenants: line.nombre_contenants_defaut ? String(line.nombre_contenants_defaut) : '1',
       code_barre: line.code_barre ?? '',
       isKnownProduct: true,
     });
@@ -198,6 +205,7 @@ export function ProductIn() {
       unite: form.unite,
       delta,
       code_barre: form.code_barre.trim() || null,
+      nombre_contenants: nombreContenants,
     };
 
     const decision = await applyEntry(candidate);
