@@ -3,6 +3,7 @@ import {
   CATEGORIES,
   CATEGORY_LABELS,
   formatLiquidQuantity,
+  formatPackagedQuantity,
   UNITS,
   UNIT_LABELS,
   type Category,
@@ -163,6 +164,16 @@ function ArticleFields({ values, onChange, quantiteLabel }: ArticleFieldsProps) 
           {formatLiquidQuantity(
             Number(values.quantite_totale.replace(',', '.')) || 0,
             Number(values.contenance_unitaire.replace(',', '.')),
+          )}
+        </p>
+      )}
+      {values.unite === 'g' && Number(values.contenance_unitaire.replace(',', '.')) > 0 && (
+        <p className="article-manager__hint">
+          ≈{' '}
+          {formatPackagedQuantity(
+            Number(values.quantite_totale.replace(',', '.')) || 0,
+            Number(values.contenance_unitaire.replace(',', '.')),
+            'g',
           )}
         </p>
       )}

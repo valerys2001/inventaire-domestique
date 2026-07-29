@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { computeDeltaFromPack, formatLiquidQuantity, formatQuantityDetailed, roundForDisplay } from './quantity';
+import {
+  computeDeltaFromPack,
+  formatLiquidQuantity,
+  formatPackagedQuantity,
+  formatQuantityDetailed,
+  roundForDisplay,
+} from './quantity';
 
 describe('computeDeltaFromPack', () => {
   it('calcule 9 pour un pack de 6 bouteilles de 1.5 L', () => {
@@ -62,6 +68,21 @@ describe('formatQuantityDetailed', () => {
     expect(formatQuantityDetailed(3, 0, 'g')).toBe('3 grammes');
     expect(formatQuantityDetailed(3, 0, 'l')).toBe('3 litres');
   });
+
+  it('affiche "N × taille" pour un produit solide conditionné, jamais le total agrégé seul', () => {
+    // 12 pots de 60 g = 720 g au total, mais "720 g" ne veut rien dire à l'achat : on veut
+    // "12 × 60 grammes".
+    expect(formatQuantityDetailed(720, 60, 'g')).toBe('12 × 60 grammes');
+  });
+
+  it('affiche "1 × taille" même pour un seul gros contenant (pas la valeur brute seule)', () => {
+    // Pot de fromage blanc 500 g : "1 × 500 grammes", pas "500 grammes" tout seul.
+    expect(formatQuantityDetailed(500, 500, 'g')).toBe('1 × 500 grammes');
+  });
+
+  it('affiche le % du dernier contenant entamé pour un solide conditionné', () => {
+    expect(formatQuantityDetailed(200, 500, 'g')).toBe('1 × 500 grammes (dernier à 40%)');
+  });
 });
 
 describe('formatLiquidQuantity', () => {
@@ -75,5 +96,15 @@ describe('formatLiquidQuantity', () => {
 
   it('compte le dernier contenant entamé même à un stock très bas', () => {
     expect(formatLiquidQuantity(0.1, 1.5)).toBe('1 contenant (dernier à 7%)');
+  });
+});
+
+describe('formatPackagedQuantity', () => {
+  it('garde la taille du contenant (contrairement aux liquides)', () => {
+    expect(formatPackagedQuantity(720, 60, 'g')).toBe('12 × 60 grammes');
+  });
+
+  it('affiche "0 × taille" pour un stock vide', () => {
+    expect(formatPackagedQuantity(0, 60, 'g')).toBe('0 × 60 grammes');
   });
 });

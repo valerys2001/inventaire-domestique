@@ -17,7 +17,7 @@ export function roundForDisplay(quantite: number): number {
   return Math.round(quantite * 100) / 100;
 }
 
-export interface LiquidQuantityDisplay {
+export interface PackagedQuantityDisplay {
   /** Contenants pleins, non entamés. */
   fullContainers: number;
   /** % restant du dernier contenant entamé, ou null si aucun contenant n'est entamé. */
@@ -27,14 +27,15 @@ export interface LiquidQuantityDisplay {
 }
 
 /**
- * Décompose un stock liquide en contenants pleins + % du dernier entamé. Le % vient de la
- * jauge du dernier contenant (cf. ProductOut) : il ne doit jamais se traduire en litres pour
+ * Décompose un stock conditionné (liquide ou solide en contenants identiques : bouteilles,
+ * pots de yaourt...) en contenants pleins + % du dernier entamé. Le % vient de la jauge du
+ * dernier contenant (cf. ProductOut) : il ne doit jamais se traduire en quantité brute pour
  * l'utilisateur, seulement servir à compter "combien de contenants ai-je / me faut-il".
  */
-export function computeLiquidQuantityDisplay(
+export function computePackagedQuantityDisplay(
   quantiteTotale: number,
   contenanceUnitaire: number,
-): LiquidQuantityDisplay {
+): PackagedQuantityDisplay {
   if (!(contenanceUnitaire > 0) || !(quantiteTotale > 0)) {
     return { fullContainers: 0, lastContainerPercent: null, totalContainers: 0 };
   }
@@ -55,9 +56,23 @@ export function computeLiquidQuantityDisplay(
 
 /** Ex: "6 contenants" ou "6 contenants (dernier à 47%)". Jamais de L/mL/cL, cf. demande utilisateur. */
 export function formatLiquidQuantity(quantiteTotale: number, contenanceUnitaire: number): string {
-  const { lastContainerPercent, totalContainers } = computeLiquidQuantityDisplay(quantiteTotale, contenanceUnitaire);
+  const { lastContainerPercent, totalContainers } = computePackagedQuantityDisplay(quantiteTotale, contenanceUnitaire);
   if (totalContainers === 0) return '0 contenant';
   const base = `${totalContainers} contenant${totalContainers > 1 ? 's' : ''}`;
+  return lastContainerPercent === null ? base : `${base} (dernier à ${lastContainerPercent}%)`;
+}
+
+/**
+ * Ex: "12 × 60 grammes" ou "1 × 500 grammes (dernier à 40%)". Contrairement aux liquides, la
+ * taille du contenant reste utile ici (un pot de 60 g et un de 125 g ne sont pas le même achat),
+ * donc on la garde — mais on n'affiche JAMAIS le total agrégé seul ("720 g" ne veut rien dire
+ * pour un lot de 12 pots) : c'est l'expression "N × taille" qui fait sens à l'achat, y compris
+ * pour un seul contenant ("1 × 500 g", pas "500 g" tout seul).
+ */
+export function formatPackagedQuantity(quantiteTotale: number, contenanceUnitaire: number, unite: Unit): string {
+  const { lastContainerPercent, totalContainers } = computePackagedQuantityDisplay(quantiteTotale, contenanceUnitaire);
+  const sizeLabel = `${roundForDisplay(contenanceUnitaire)} ${UNIT_LABELS[unite]}`;
+  const base = `${totalContainers} × ${sizeLabel}`;
   return lastContainerPercent === null ? base : `${base} (dernier à ${lastContainerPercent}%)`;
 }
 
@@ -82,6 +97,9 @@ export function stockComparableQuantity(line: {
  * contenant, jamais l'un sans l'autre, dès que la contenance unitaire est significative.
  * Pour les liquides (unite 'l'), le détail devient "N contenants (dernier à X%)" plutôt qu'une
  * quantité en L/mL/cL, jugée peu parlante pour ce type de produit (cf. formatLiquidQuantity).
+ * Pour les produits solides conditionnés (unite 'g' — pots de yaourt, crème...), le total agrégé
+ * seul (ex. "720 g" pour 12 pots) n'est pas plus parlant : "12 × 60 g" prime (cf.
+ * formatPackagedQuantity), y compris pour un seul contenant ("1 × 500 g").
  */
 export function formatQuantityDetailed(
   quantiteTotale: number,
@@ -90,6 +108,9 @@ export function formatQuantityDetailed(
 ): string {
   if (unite === 'l' && contenanceUnitaire > 0) {
     return formatLiquidQuantity(quantiteTotale, contenanceUnitaire);
+  }
+  if (unite === 'g' && contenanceUnitaire > 0) {
+    return formatPackagedQuantity(quantiteTotale, contenanceUnitaire, unite);
   }
 
   const total = `${roundForDisplay(quantiteTotale)} ${UNIT_LABELS[unite]}`;
