@@ -4,6 +4,7 @@ import {
   formatQuantityDetailed,
   groupLiquidLines,
   isLastContainerQuantity,
+  matchesSearch,
   parseBarcodes,
   type Category,
   type InventoryLine,
@@ -11,6 +12,7 @@ import {
 } from '@inventaire/shared';
 import { BarcodeScanner } from '../../components/BarcodeScanner/BarcodeScanner';
 import { LiquidFolders } from '../../components/LiquidFolders/LiquidFolders';
+import { SearchBox } from '../../components/SearchBox/SearchBox';
 import { lookupProduct } from '../../services/productLookup';
 import { UnitSelector } from '../../components/UnitSelector/UnitSelector';
 import { useInventoryStore } from '../../store/inventoryStore';
@@ -46,6 +48,7 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
   const utilisateur = useInventoryStore((s) => s.utilisateur);
 
   const [method, setMethod] = useState<'liste' | 'scan'>('liste');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedCleFusion, setSelectedCleFusion] = useState<string | null>(initialCleFusion);
   const [amount, setAmount] = useState(0);
   const [gaugePercent, setGaugePercent] = useState(100);
@@ -70,7 +73,10 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
   const useGauge = selectedLine !== null && isLastContainerGauge(selectedLine);
   // On ne peut rien retirer d'un produit à 0 en stock : l'exclure évite de noyer la liste avec
   // des articles épuisés qui n'ont rien à faire dans un écran de SORTIE.
-  const inStockLines = useMemo(() => lines.filter((line) => line.quantite_totale > 0), [lines]);
+  const inStockLines = useMemo(
+    () => lines.filter((line) => line.quantite_totale > 0 && matchesSearch(searchQuery, line.nom, line.marque)),
+    [lines, searchQuery],
+  );
   const otherLines = useMemo(() => inStockLines.filter((line) => line.unite !== 'l'), [inStockLines]);
   const liquidFolders = useMemo(() => groupLiquidLines(inStockLines), [inStockLines]);
 
@@ -207,6 +213,7 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
 
       {method === 'liste' && !selectedLine && (
         <>
+          <SearchBox value={searchQuery} onChange={setSearchQuery} />
           <LiquidFolders
             folders={liquidFolders}
             renderItem={(line) => (

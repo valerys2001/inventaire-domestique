@@ -8,6 +8,7 @@ import {
   computeDeltaFromPack,
   formatQuantityDetailed,
   getNombreContenantsForBarcode,
+  matchesSearch,
   parseBarcodes,
   roundForDisplay,
   type Category,
@@ -18,6 +19,7 @@ import {
 import { BarcodeScanner } from '../../components/BarcodeScanner/BarcodeScanner';
 import { lookupProduct } from '../../services/productLookup';
 import { MergeConfirmDialog } from '../../components/MergeConfirmDialog/MergeConfirmDialog';
+import { SearchBox } from '../../components/SearchBox/SearchBox';
 import { UnitSelector } from '../../components/UnitSelector/UnitSelector';
 import { useInventoryStore } from '../../store/inventoryStore';
 import '../../styles/ProductIn.css';
@@ -96,12 +98,8 @@ export function ProductIn() {
   };
 
   const chooserResults = useMemo(() => {
-    const query = chooserQuery.trim().toLowerCase();
     const sorted = [...lines].sort((a, b) => a.nom.localeCompare(b.nom));
-    const filtered = query
-      ? sorted.filter((line) => line.nom.toLowerCase().includes(query) || line.marque.toLowerCase().includes(query))
-      : sorted;
-    return filtered.slice(0, 30);
+    return sorted.filter((line) => matchesSearch(chooserQuery, line.nom, line.marque)).slice(0, 30);
   }, [chooserQuery, lines]);
 
   // "Un pack" seul ne veut rien dire : on affiche toujours le total qui sera réellement ajouté
@@ -305,16 +303,7 @@ export function ProductIn() {
 
       {method === 'manuel' && manuelStep === 'choose' && !form && (
         <div className="product-in__chooser">
-          <label className="product-in__field">
-            <span>Chercher un produit déjà en stock</span>
-            <input
-              type="text"
-              value={chooserQuery}
-              onChange={(e) => setChooserQuery(e.target.value)}
-              placeholder="Nom ou marque…"
-              autoFocus
-            />
-          </label>
+          <SearchBox value={chooserQuery} onChange={setChooserQuery} placeholder="Nom ou marque…" autoFocus />
 
           <button type="button" className="product-in__submit" onClick={startBlankForm}>
             + Nouveau produit

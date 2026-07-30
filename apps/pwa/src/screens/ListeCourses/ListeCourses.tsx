@@ -1,6 +1,14 @@
 import { useMemo, useState } from 'react';
-import { CATEGORY_LABELS, formatQuantityDetailed, groupLiquidLines, UNIT_LABELS, type ListeCoursesItem } from '@inventaire/shared';
+import {
+  CATEGORY_LABELS,
+  formatQuantityDetailed,
+  groupLiquidLines,
+  matchesSearch,
+  UNIT_LABELS,
+  type ListeCoursesItem,
+} from '@inventaire/shared';
 import { LiquidFolders } from '../../components/LiquidFolders/LiquidFolders';
+import { SearchBox } from '../../components/SearchBox/SearchBox';
 import { UnitSelector } from '../../components/UnitSelector/UnitSelector';
 import { useInventoryStore } from '../../store/inventoryStore';
 import '../../styles/ListeCourses.css';
@@ -12,11 +20,18 @@ export function ListeCourses() {
   const updateShoppingListItem = useInventoryStore((s) => s.updateShoppingListItem);
   const deleteShoppingList = useInventoryStore((s) => s.deleteShoppingList);
   const [editing, setEditing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // quantite à 0 = retiré de la liste (pas de suppression de ligne côté Sheet, plus simple).
+  const activeItems = useMemo(() => listeCourses.filter((item) => item.quantite > 0), [listeCourses]);
+  // Filtré par recherche, pour l'affichage uniquement : les actions "Éditer"/"Supprimer" ci-dessous
+  // portent sur toute la liste, pas seulement ce qui matche la recherche du moment.
   const visibleItems = useMemo(
-    () => [...listeCourses].filter((item) => item.quantite > 0).sort((a, b) => a.nom.localeCompare(b.nom)),
-    [listeCourses],
+    () =>
+      [...activeItems]
+        .filter((item) => matchesSearch(searchQuery, item.nom, item.marque))
+        .sort((a, b) => a.nom.localeCompare(b.nom)),
+    [activeItems, searchQuery],
   );
 
   // Le regroupement par dossier (groupLiquidLines) reste volontairement réservé aux liquides
@@ -64,7 +79,7 @@ export function ListeCourses() {
     <div className="liste-courses">
       <h1>Liste de courses</h1>
 
-      {visibleItems.length > 0 && (
+      {activeItems.length > 0 && (
         <div className="liste-courses__actions">
           <button type="button" className="liste-courses__action" onClick={() => setEditing((v) => !v)}>
             {editing ? 'Terminer l\'édition' : 'Éditer la liste'}
@@ -78,13 +93,17 @@ export function ListeCourses() {
       {listeCoursesError && <p className="liste-courses__error">{listeCoursesError}</p>}
       {listeCoursesLoading && <p className="liste-courses__hint">Mise à jour…</p>}
 
+      {activeItems.length > 0 && <SearchBox value={searchQuery} onChange={setSearchQuery} />}
+
       <LiquidFolders folders={liquidFolders} renderItem={renderItem} />
 
       <ul className="liste-courses__items">
         {otherItems.map(renderItem)}
         {visibleItems.length === 0 && (
           <li className="liste-courses__empty">
-            Aucune liste en cours. Va dans Inventaire → "Construction de liste" pour en créer une.
+            {activeItems.length === 0
+              ? 'Aucune liste en cours. Va dans Inventaire → "Construction de liste" pour en créer une.'
+              : 'Aucun article ne correspond à la recherche.'}
           </li>
         )}
       </ul>

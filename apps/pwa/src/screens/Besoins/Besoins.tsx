@@ -1,19 +1,22 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CATEGORY_LABELS,
   formatQuantityDetailed,
   groupLiquidLines,
+  matchesSearch,
   stockComparableQuantity,
   UNIT_LABELS,
   type InventoryLine,
 } from '@inventaire/shared';
 import { LiquidFolders } from '../../components/LiquidFolders/LiquidFolders';
+import { SearchBox } from '../../components/SearchBox/SearchBox';
 import { useInventoryStore } from '../../store/inventoryStore';
 import '../../styles/Besoins.css';
 
 export function Besoins() {
   const lines = useInventoryStore((s) => s.lines);
   const updateThreshold = useInventoryStore((s) => s.updateThreshold);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Opt-in uniquement : un seuil_alerte explicite (réglé depuis l'écran Sortie) signale que
   // l'utilisateur veut suivre ce produit ici, contrairement à l'indicateur "stock bas" générique
@@ -22,9 +25,14 @@ export function Besoins() {
   const needed = useMemo(
     () =>
       lines
-        .filter((line) => line.seuil_alerte !== null && stockComparableQuantity(line) <= line.seuil_alerte)
+        .filter(
+          (line) =>
+            line.seuil_alerte !== null &&
+            stockComparableQuantity(line) <= line.seuil_alerte &&
+            matchesSearch(searchQuery, line.nom, line.marque),
+        )
         .sort((a, b) => a.nom.localeCompare(b.nom)),
-    [lines],
+    [lines, searchQuery],
   );
 
   const otherNeeded = useMemo(() => needed.filter((line) => line.unite !== 'l'), [needed]);
@@ -61,6 +69,8 @@ export function Besoins() {
       <p className="besoins__hint">
         Produits suivis (seuil réglé depuis l'écran Sortie) actuellement épuisés ou sous leur seuil.
       </p>
+
+      <SearchBox value={searchQuery} onChange={setSearchQuery} />
 
       <LiquidFolders folders={liquidFolders} renderItem={renderItem} />
 

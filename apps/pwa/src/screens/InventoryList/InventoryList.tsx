@@ -5,11 +5,13 @@ import {
   DEFAULT_LOW_STOCK_THRESHOLD,
   formatQuantityDetailed,
   groupLiquidLines,
+  matchesSearch,
   stockComparableQuantity,
   type InventoryLine,
 } from '@inventaire/shared';
 import { CategoryFilter } from '../../components/CategoryFilter/CategoryFilter';
 import { LiquidFolders } from '../../components/LiquidFolders/LiquidFolders';
+import { SearchBox } from '../../components/SearchBox/SearchBox';
 import { UnitSelector } from '../../components/UnitSelector/UnitSelector';
 import { useInventoryStore } from '../../store/inventoryStore';
 import '../../styles/InventoryList.css';
@@ -43,6 +45,7 @@ export function InventoryList({ onSelectLine, onListeGenerated }: InventoryListP
   // (partagées, cf. quantite_cible) tout en naviguant par catégorie comme d'habitude, puis
   // générer l'écart en liste de courses. Montre tous les produits, y compris ceux à 0.
   const [buildMode, setBuildMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const categoryLines = useMemo(
     () => (filterCategory === 'toutes' ? lines : lines.filter((l) => l.categorie === filterCategory)),
@@ -52,12 +55,14 @@ export function InventoryList({ onSelectLine, onListeGenerated }: InventoryListP
   const zeroCount = useMemo(() => categoryLines.filter((l) => l.quantite_totale === 0).length, [categoryLines]);
 
   const visibleLines = useMemo(() => {
-    const filtered = buildMode || showZero ? categoryLines : categoryLines.filter((l) => l.quantite_totale > 0);
+    const filtered = (buildMode || showZero ? categoryLines : categoryLines.filter((l) => l.quantite_totale > 0)).filter(
+      (l) => matchesSearch(searchQuery, l.nom, l.marque),
+    );
     return [...filtered].sort((a, b) => {
       if (a.categorie !== b.categorie) return a.categorie.localeCompare(b.categorie);
       return a.nom.localeCompare(b.nom);
     });
-  }, [categoryLines, showZero, buildMode]);
+  }, [categoryLines, showZero, buildMode, searchQuery]);
 
   const pendingTargetsCount = useMemo(
     () => lines.filter((l) => l.quantite_cible !== null && l.quantite_cible > l.quantite_totale).length,
@@ -172,6 +177,8 @@ export function InventoryList({ onSelectLine, onListeGenerated }: InventoryListP
           courses (écart entre la cible et le stock actuel).
         </p>
       )}
+
+      <SearchBox value={searchQuery} onChange={setSearchQuery} />
 
       <CategoryFilter value={filterCategory} onChange={setFilterCategory} />
 
