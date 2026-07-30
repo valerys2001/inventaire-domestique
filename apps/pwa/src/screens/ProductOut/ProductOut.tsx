@@ -76,7 +76,16 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
 
   useEffect(() => {
     if (selectedLine) {
-      setAmount(selectedLine.unite === 'unite' ? Math.min(1, selectedLine.quantite_totale) : selectedLine.contenance_unitaire || 0);
+      // "% restant" (ex: amandes en vrac) : l'utilisateur choisit directement le NOUVEAU
+      // pourcentage restant, jamais une quantité à retirer — le curseur part donc du niveau
+      // actuellement en stock, pas d'un contenant plein comme pour les autres unités.
+      setAmount(
+        selectedLine.unite === 'unite'
+          ? Math.min(1, selectedLine.quantite_totale)
+          : selectedLine.unite === 'pourcent'
+            ? selectedLine.quantite_totale
+            : selectedLine.contenance_unitaire || 0,
+      );
       // Niveau cosmétique du dernier contenant : repart de 100% (plein, non entamé) quand rien
       // n'est encore mémorisé pour cette ligne — jamais dérivé de quantite_totale (qui reste un
       // compte entier de contenants et ne dit rien sur le niveau de remplissage).
@@ -112,13 +121,22 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
 
   // Toujours le même retrait "en contenants entiers", jauge ou pas : le niveau cosmétique du
   // dernier contenant (ci-dessus) ne touche jamais au stock réel, il s'enregistre indépendamment.
+  // Exception : "% restant", où `amount` EST déjà le nouveau niveau absolu (pas un retrait).
   const handleRetirer = async () => {
-    if (!selectedLine || amount <= 0) return;
+    if (!selectedLine) return;
 
-    await applyExit({ cle_fusion: selectedLine.cle_fusion, delta: -amount, utilisateur });
-    setConfirmation(
-      `${formatQuantityDetailed(amount, selectedLine.contenance_unitaire, selectedLine.unite)} retiré(s) de ${selectedLine.nom}`,
-    );
+    if (selectedLine.unite === 'pourcent') {
+      const delta = amount - selectedLine.quantite_totale;
+      if (delta >= 0) return; // pas de baisse choisie (une hausse se fait dans Entrée)
+      await applyExit({ cle_fusion: selectedLine.cle_fusion, delta, utilisateur });
+      setConfirmation(`${selectedLine.nom} : ${amount}% restant`);
+    } else {
+      if (amount <= 0) return;
+      await applyExit({ cle_fusion: selectedLine.cle_fusion, delta: -amount, utilisateur });
+      setConfirmation(
+        `${formatQuantityDetailed(amount, selectedLine.contenance_unitaire, selectedLine.unite)} retiré(s) de ${selectedLine.nom}`,
+      );
+    }
 
     setSelectedCleFusion(null);
     onConsumed?.();
@@ -267,7 +285,7 @@ export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {
             }
           />
           <button type="button" className="product-out__submit" onClick={handleRetirer}>
-            Retirer
+            {selectedLine.unite === 'pourcent' ? 'Enregistrer le nouveau %' : 'Retirer'}
           </button>
           <button type="button" className="product-out__cancel" onClick={clearSelection}>
             Choisir un autre produit

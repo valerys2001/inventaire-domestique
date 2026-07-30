@@ -127,6 +127,22 @@ describe('suggestCategory', () => {
     ).toBe('boissons');
   });
 
+  it('classe un thé en "Thés" plutôt qu\'en "Boissons", même tagué comme sous-catégorie de beverages', () => {
+    expect(
+      suggestCategory(
+        'open-food-facts',
+        product({ categories_tags: ['en:beverages', 'en:hot-beverages', 'en:teas'] }),
+      ),
+    ).toBe('thes');
+    expect(suggestCategory('open-food-facts', product({ categories: 'Boissons chaudes, Thés, Thés verts' }))).toBe(
+      'thes',
+    );
+  });
+
+  it('classe une infusion/tisane en "Thés"', () => {
+    expect(suggestCategory('open-food-facts', product({ categories: 'Infusions, Tisanes, Camomille' }))).toBe('thes');
+  });
+
   it('classe un produit entretien via mots-clés français (lessive, nettoyant)', () => {
     expect(suggestCategory('open-products-facts', product({ categories: 'Entretien de la maison, Lessives' }))).toBe(
       'produits_entretien',

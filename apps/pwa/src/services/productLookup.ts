@@ -200,6 +200,12 @@ const FRESH_KEYWORDS = [
   'laitiers',
   'charcuterie',
 ];
+// Les thés/infusions sont catégorisés par Open Food Facts comme une sous-catégorie de
+// "beverages" (ex. tags "hot-beverages, teas") : testé AVANT BEVERAGE_KEYWORDS pour que "Thés"
+// gagne sur "Boissons" plutôt que l'inverse. Pas de "the"/"thé" seul (accent retiré = "the",
+// qui matcherait l'anglais "the" dans n'importe quel tag) : formes plus longues/sûres uniquement,
+// même logique que "vins"/"salee" ailleurs dans ce fichier.
+const TEA_KEYWORDS = ['teas', 'thes', 'infusion', 'infusions', 'tisane', 'tisanes', 'rooibos'];
 // Eau, soda, jus, vin, bière... vont dans "Boissons", pas "Épicerie sucrée" (une boisson n'est
 // pas un produit sucré). Testé AVANT les mots-clés sucré/salé pour éviter tout chevauchement
 // (ex. "sweetened-beverages" contient "sweet" mais doit rester une boisson).
@@ -286,6 +292,7 @@ export function suggestCategory(source: LookupSource, product: OpenFactsProduct)
   if (matchesAny(tags, FRUIT_KEYWORDS)) return 'fruits';
   if (matchesAny(tags, VEGETABLE_KEYWORDS)) return 'legumes';
   if (matchesAny(tags, FRESH_KEYWORDS)) return 'produits_frais';
+  if (matchesAny(tags, TEA_KEYWORDS)) return 'thes';
   if (matchesAny(tags, BEVERAGE_KEYWORDS)) return 'boissons';
   if (matchesAny(tags, SWEET_KEYWORDS)) return 'epicerie_sucree';
   if (matchesAny(tags, SALTY_KEYWORDS)) return 'epicerie_salee';

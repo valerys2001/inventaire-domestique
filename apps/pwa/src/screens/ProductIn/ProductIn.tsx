@@ -29,6 +29,13 @@ interface EntryForm {
   contenance_unitaire: string;
   unite: Unit;
   nombre_contenants: string;
+  /**
+   * Pour `unite === 'pourcent'` (ex: amandes/cacahuètes en vrac) : le stock N'EST PAS incrémenté
+   * par un delta, contrairement à tous les autres cas — l'utilisateur choisit directement le
+   * NOUVEAU pourcentage restant après avoir rempli/complété le paquet (ex: "rempli à 95%"), et le
+   * delta réellement appliqué (95% - pourcentage précédent) est calculé à la soumission.
+   */
+  pourcentage_restant: string;
   code_barre: string;
   isKnownProduct: boolean;
 }
@@ -40,6 +47,7 @@ const EMPTY_FORM: EntryForm = {
   contenance_unitaire: '',
   unite: 'unite',
   nombre_contenants: '1',
+  pourcentage_restant: '100',
   code_barre: '',
   isKnownProduct: false,
 };
@@ -99,7 +107,7 @@ export function ProductIn() {
   // "Un pack" seul ne veut rien dire : on affiche toujours le total qui sera réellement ajouté
   // pendant la saisie, avant validation, pas seulement après coup dans la liste.
   const previewDelta = useMemo(() => {
-    if (!form) return null;
+    if (!form || form.unite === 'pourcent') return null;
     const contenance = Number(form.contenance_unitaire);
     const nombreContenants = Number(form.nombre_contenants) || 1;
     if (!(contenance > 0) || !(nombreContenants > 0)) return null;
@@ -149,6 +157,10 @@ export function ProductIn() {
           : result.nombre_contenants
             ? String(result.nombre_contenants)
             : '1',
+        // Point de départ du curseur "% restant" : le niveau actuellement en stock pour ce
+        // produit (l'utilisateur le fera glisser vers le nouveau niveau après remplissage), ou
+        // 100% par défaut pour un tout nouveau produit en % jamais vu.
+        pourcentage_restant: String(existing?.unite === 'pourcent' ? existing.quantite_totale : 100),
         code_barre: result.code_barre,
         isKnownProduct: Boolean(existing) || result.source !== 'manuel',
       });
@@ -184,6 +196,7 @@ export function ProductIn() {
       categorie: line.categorie,
       contenance_unitaire: String(line.contenance_unitaire),
       unite: line.unite,
+      pourcentage_restant: String(line.unite === 'pourcent' ? line.quantite_totale : 100),
     });
     setNameSuggestionsOpen(false);
   };
@@ -196,6 +209,7 @@ export function ProductIn() {
       contenance_unitaire: String(line.contenance_unitaire),
       unite: line.unite,
       nombre_contenants: line.nombre_contenants_defaut ? String(line.nombre_contenants_defaut) : '1',
+      pourcentage_restant: String(line.unite === 'pourcent' ? line.quantite_totale : 100),
       code_barre: line.code_barre ?? '',
       isKnownProduct: true,
     });
@@ -205,11 +219,26 @@ export function ProductIn() {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!form) return;
-    const contenance = Number(form.contenance_unitaire);
+    const isPourcent = form.unite === 'pourcent';
+    // Contenance fixée à 100 pour un produit en % : le "contenant" est le paquet plein (100%),
+    // jamais une valeur saisie librement (cf. select Unité, qui la force déjà à la sélection).
+    const contenance = isPourcent ? 100 : Number(form.contenance_unitaire);
     const nombreContenants = Number(form.nombre_contenants) || 1;
     if (!form.nom.trim() || !(contenance > 0)) return;
 
-    const delta = computeDeltaFromPack(nombreContenants, contenance);
+    let delta: number;
+    if (isPourcent) {
+      // Le stock réel N'EST PAS incrémenté ici : quantite_totale doit devenir EXACTEMENT le
+      // pourcentage choisi, pas ce pourcentage en plus de l'existant. On retrouve la ligne
+      // existante (même clé de fusion) pour en déduire le delta réel à appliquer.
+      const cle = buildMergeKey(form.nom.trim(), form.marque.trim(), contenance, form.unite);
+      const existingTarget = lines.find((l) => l.cle_fusion === cle);
+      const nouveauPourcentage = Number(form.pourcentage_restant) || 0;
+      delta = nouveauPourcentage - (existingTarget?.quantite_totale ?? 0);
+    } else {
+      delta = computeDeltaFromPack(nombreContenants, contenance);
+    }
+
     const candidate: CandidateEntry = {
       nom: form.nom.trim(),
       marque: form.marque.trim(),
@@ -218,13 +247,16 @@ export function ProductIn() {
       unite: form.unite,
       delta,
       code_barre: form.code_barre.trim() || null,
-      nombre_contenants: nombreContenants,
+      nombre_contenants: isPourcent ? null : nombreContenants,
     };
 
     const decision = await applyEntry(candidate);
     if (decision.action === 'merge') {
       const label = [decision.target.nom, decision.target.marque].filter(Boolean).join(' ');
-      setToast({ message: `+${roundForDisplay(delta)} ${UNIT_LABELS[form.unite]} ajoutés à ${label}` });
+      const message = isPourcent
+        ? `${label} : ${Number(form.pourcentage_restant) || 0}% restant`
+        : `+${roundForDisplay(delta)} ${UNIT_LABELS[form.unite]} ajoutés à ${label}`;
+      setToast({ message });
     }
     // Retourne à la méthode d'origine : liste de choix pour la saisie manuelle, scanner sinon.
     if (method === 'manuel') {
@@ -368,20 +400,33 @@ export function ProductIn() {
           </label>
 
           <div className="product-in__row">
-            <label className="product-in__field">
-              <span>Contenance unitaire</span>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.contenance_unitaire}
-                onChange={(e) => updateForm({ contenance_unitaire: e.target.value })}
-                required
-              />
-            </label>
+            {form.unite !== 'pourcent' && (
+              <label className="product-in__field">
+                <span>Contenance unitaire</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.contenance_unitaire}
+                  onChange={(e) => updateForm({ contenance_unitaire: e.target.value })}
+                  required
+                />
+              </label>
+            )}
             <label className="product-in__field">
               <span>Unité</span>
-              <select value={form.unite} onChange={(e) => updateForm({ unite: e.target.value as Unit })}>
+              <select
+                value={form.unite}
+                onChange={(e) => {
+                  const nextUnite = e.target.value as Unit;
+                  // "% restant" fixe la contenance à 100 (le paquet plein) : pas de valeur libre à
+                  // saisir pour ce type de produit (cf. champ "Contenance unitaire" masqué ci-dessus).
+                  updateForm({
+                    unite: nextUnite,
+                    contenance_unitaire: nextUnite === 'pourcent' ? '100' : form.contenance_unitaire,
+                  });
+                }}
+              >
                 {UNITS.map((u) => (
                   <option key={u} value={u}>
                     {UNIT_LABELS[u]}
@@ -391,14 +436,25 @@ export function ProductIn() {
             </label>
           </div>
 
-          <label className="product-in__field">
-            <span>Nombre de contenants (pack)</span>
-            <UnitSelector
-              unite="unite"
-              value={Number(form.nombre_contenants) || 1}
-              onChange={(value) => updateForm({ nombre_contenants: String(Math.max(1, value)) })}
-            />
-          </label>
+          {form.unite === 'pourcent' ? (
+            <label className="product-in__field">
+              <span>Pourcentage restant après cette entrée</span>
+              <UnitSelector
+                unite="pourcent"
+                value={Number(form.pourcentage_restant) || 0}
+                onChange={(value) => updateForm({ pourcentage_restant: String(value) })}
+              />
+            </label>
+          ) : (
+            <label className="product-in__field">
+              <span>Nombre de contenants (pack)</span>
+              <UnitSelector
+                unite="unite"
+                value={Number(form.nombre_contenants) || 1}
+                onChange={(value) => updateForm({ nombre_contenants: String(Math.max(1, value)) })}
+              />
+            </label>
+          )}
 
           {previewDelta !== null && (
             <p className="product-in__preview">
