@@ -1,4 +1,4 @@
-import { UNIT_LABELS, type Unit } from './categories';
+import { UNIT_LABELS, type Category, type Unit } from './categories';
 
 /**
  * Calcule la quantité à ajouter au total à partir d'un conditionnement.
@@ -101,6 +101,28 @@ export function resetNiveauDernierContenant(
   niveauActuel: number | null,
 ): number | null {
   return isLastContainerQuantity(quantiteTotale, contenanceUnitaire) ? niveauActuel : null;
+}
+
+// Pour entretien/hygiène/boissons, "combien de bouteilles restantes" perd son sens une fois qu'il
+// n'en reste qu'une : mieux vaut jauger le niveau du dernier contenant en pourcentage (ex. le
+// dernier flacon de vinaigre passe de 100% à 50%) que de compter en fractions de contenant.
+// Purement cosmétique (cf. InventoryLine.niveau_dernier_contenant) : le stock réel (le "vrai
+// compte") reste toujours un nombre entier de contenants. Partagé entre Sortie ET Entrée : le
+// niveau doit être réglable des deux côtés, exactement comme pour un produit en `unite='pourcent'`.
+export const GAUGE_CATEGORIES: Category[] = ['produits_entretien', 'cosmetiques_hygiene', 'boissons'];
+
+export function isLastContainerGauge(line: {
+  categorie: Category;
+  unite: Unit;
+  quantite_totale: number;
+  contenance_unitaire: number;
+}): boolean {
+  return (
+    GAUGE_CATEGORIES.includes(line.categorie) &&
+    line.unite !== 'unite' &&
+    line.unite !== 'pourcent' &&
+    isLastContainerQuantity(line.quantite_totale, line.contenance_unitaire)
+  );
 }
 
 /**

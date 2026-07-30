@@ -3,10 +3,9 @@ import {
   buildMergeKey,
   formatQuantityDetailed,
   groupLiquidLines,
-  isLastContainerQuantity,
+  isLastContainerGauge,
   matchesSearch,
   parseBarcodes,
-  type Category,
   type InventoryLine,
   UNIT_LABELS,
 } from '@inventaire/shared';
@@ -21,23 +20,6 @@ import '../../styles/ProductOut.css';
 interface ProductOutProps {
   initialCleFusion: string | null;
   onConsumed?: () => void;
-}
-
-// Pour entretien/hygiène/boissons, "combien de bouteilles restantes" perd son sens une fois qu'il
-// n'en reste qu'une : mieux vaut jauger le niveau du dernier contenant en pourcentage (ex. le
-// dernier flacon de vinaigre passe de 100% à 50%) que de compter en fractions de contenant.
-// Purement cosmétique (cf. InventoryLine.niveau_dernier_contenant) : le stock réel (le "vrai
-// compte") reste toujours un nombre entier de contenants, géré par le stepper habituel plus bas —
-// cette jauge ne fait qu'annoter visuellement le dernier contenant, sans jamais y toucher.
-const GAUGE_CATEGORIES: Category[] = ['produits_entretien', 'cosmetiques_hygiene', 'boissons'];
-
-function isLastContainerGauge(line: InventoryLine): boolean {
-  return (
-    GAUGE_CATEGORIES.includes(line.categorie) &&
-    line.unite !== 'unite' &&
-    line.unite !== 'pourcent' &&
-    isLastContainerQuantity(line.quantite_totale, line.contenance_unitaire)
-  );
 }
 
 export function ProductOut({ initialCleFusion, onConsumed }: ProductOutProps) {

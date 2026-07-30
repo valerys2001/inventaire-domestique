@@ -3,6 +3,7 @@ import {
   computeDeltaFromPack,
   formatContainerQuantity,
   formatQuantityDetailed,
+  isLastContainerGauge,
   isLastContainerQuantity,
   resetNiveauDernierContenant,
   roundForDisplay,
@@ -143,5 +144,26 @@ describe('resetNiveauDernierContenant', () => {
 
   it('remet à null une fois le dernier contenant totalement épuisé (0 en stock)', () => {
     expect(resetNiveauDernierContenant(0, 1.5, 42)).toBeNull();
+  });
+});
+
+describe('isLastContainerGauge', () => {
+  const base = { categorie: 'boissons' as const, unite: 'l' as const, quantite_totale: 0.5, contenance_unitaire: 1.5 };
+
+  it('vrai pour un dernier contenant entamé dans une catégorie éligible', () => {
+    expect(isLastContainerGauge(base)).toBe(true);
+  });
+
+  it("faux pour une catégorie non éligible (ex: épicerie)", () => {
+    expect(isLastContainerGauge({ ...base, categorie: 'epicerie_salee' })).toBe(false);
+  });
+
+  it("faux pour unite='unite' ou 'pourcent' (pas de notion de dernier contenant)", () => {
+    expect(isLastContainerGauge({ ...base, unite: 'unite' })).toBe(false);
+    expect(isLastContainerGauge({ ...base, unite: 'pourcent' })).toBe(false);
+  });
+
+  it("faux dès qu'il reste 2 contenants ou plus", () => {
+    expect(isLastContainerGauge({ ...base, quantite_totale: 3 })).toBe(false);
   });
 });

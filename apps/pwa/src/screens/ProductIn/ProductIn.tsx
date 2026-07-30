@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   buildMergeKey,
   CATEGORIES,
@@ -8,6 +8,7 @@ import {
   computeDeltaFromPack,
   formatQuantityDetailed,
   getNombreContenantsForBarcode,
+  isLastContainerGauge,
   matchesSearch,
   parseBarcodes,
   roundForDisplay,
@@ -57,6 +58,7 @@ const EMPTY_FORM: EntryForm = {
 export function ProductIn() {
   const applyEntry = useInventoryStore((s) => s.applyEntry);
   const undoLastEntry = useInventoryStore((s) => s.undoLastEntry);
+  const updateNiveauDernierContenant = useInventoryStore((s) => s.updateNiveauDernierContenant);
   const lines = useInventoryStore((s) => s.lines);
 
   const [method, setMethod] = useState<'scan' | 'manuel'>('scan');
@@ -111,6 +113,37 @@ export function ProductIn() {
     if (!(contenance > 0) || !(nombreContenants > 0)) return null;
     return computeDeltaFromPack(nombreContenants, contenance);
   }, [form?.contenance_unitaire, form?.nombre_contenants]);
+
+  // Ligne existante correspondant au formulaire (même clé de fusion), pour retrouver son niveau de
+  // dernier contenant éventuel — indépendamment de la quantité en cours de saisie ci-dessus.
+  const existingLine = useMemo(() => {
+    if (!form) return null;
+    const contenance = form.unite === 'pourcent' ? 100 : Number(form.contenance_unitaire);
+    if (!form.nom.trim() || !(contenance > 0)) return null;
+    const cle = buildMergeKey(form.nom.trim(), form.marque.trim(), contenance, form.unite);
+    return lines.find((l) => l.cle_fusion === cle) ?? null;
+  }, [form?.nom, form?.marque, form?.contenance_unitaire, form?.unite, lines]);
+
+  const gaugeEligible = existingLine !== null && isLastContainerGauge(existingLine);
+
+  // Réglable des deux côtés (Entrée ET Sortie), exactement comme le % d'un produit `pourcent` :
+  // purement cosmétique, indépendant de la quantité ajoutée par ce formulaire.
+  const [gaugePercent, setGaugePercent] = useState(100);
+  const [gaugeSaved, setGaugeSaved] = useState(false);
+
+  useEffect(() => {
+    if (existingLine) {
+      setGaugePercent(existingLine.niveau_dernier_contenant ?? 100);
+      setGaugeSaved(false);
+    }
+  }, [existingLine?.id]);
+
+  const handleSaveGauge = async () => {
+    if (!existingLine) return;
+    await updateNiveauDernierContenant(existingLine.cle_fusion, gaugePercent);
+    setGaugeSaved(true);
+    setTimeout(() => setGaugeSaved(false), 2000);
+  };
 
   const handleDetected = async (barcode: string) => {
     setScanActive(false);
@@ -455,6 +488,18 @@ export function ProductIn() {
             <span>Code-barre</span>
             <input type="text" value={form.code_barre} onChange={(e) => updateForm({ code_barre: e.target.value })} />
           </label>
+
+          {gaugeEligible && (
+            <div className="product-in__gauge">
+              {/* Purement cosmétique : n'affecte jamais le stock réel ajouté ci-dessus par ce
+                  formulaire. Réglable ici comme dans Sortie — même mécanique des deux côtés. */}
+              <p className="product-in__gauge-hint">Dernier contenant — niveau restant (cosmétique) :</p>
+              <UnitSelector unite="pourcent" value={gaugePercent} onChange={setGaugePercent} />
+              <button type="button" className="product-in__cancel" onClick={handleSaveGauge}>
+                {gaugeSaved ? 'Enregistré ✓' : 'Enregistrer le niveau'}
+              </button>
+            </div>
+          )}
 
           <button type="submit" className="product-in__submit">
             Ajouter au stock
