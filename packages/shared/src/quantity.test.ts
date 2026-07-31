@@ -166,4 +166,10 @@ describe('isLastContainerGauge', () => {
   it("faux dès qu'il reste 2 contenants ou plus", () => {
     expect(isLastContainerGauge({ ...base, quantite_totale: 3 })).toBe(false);
   });
+
+  it("vrai pour la catégorie 'thes' (ex: dernier paquet de thé vert menthe entamé)", () => {
+    expect(isLastContainerGauge({ ...base, categorie: 'thes', unite: 'g', contenance_unitaire: 100, quantite_totale: 30 })).toBe(
+      true,
+    );
+  });
 });
