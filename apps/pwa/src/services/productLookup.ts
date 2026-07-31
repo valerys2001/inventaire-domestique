@@ -211,6 +211,11 @@ const TEA_KEYWORDS = ['teas', 'thes', 'infusion', 'infusions', 'tisane', 'tisane
 // pour que "Cafés" gagne sur "Boissons". "cafe"/"cafes" sans risque de faux positif ici (pas de
 // mot français courant qui les contienne accidentellement, contrairement à "the"/"vin"/"sale").
 const COFFEE_KEYWORDS = ['cafes', 'cafe', 'coffee', 'coffees', 'espresso', 'expresso'];
+// Les épices sont souvent aussi taguées "condiments" ou "gastronomie" par Open Food Facts : testé
+// AVANT SALTY_KEYWORDS/FINE_KEYWORDS pour que "Épices" gagne. "epices" (pluriel, jamais "epice"
+// seul) évite tout chevauchement avec "epicerie" (qui contient "epice" comme préfixe une fois les
+// accents retirés), même logique que "vins"/"salee"/"the" ailleurs dans ce fichier.
+const SPICE_KEYWORDS = ['epices', 'spices'];
 // Eau, soda, jus, vin, bière... vont dans "Boissons", pas "Épicerie sucrée" (une boisson n'est
 // pas un produit sucré). Testé AVANT les mots-clés sucré/salé pour éviter tout chevauchement
 // (ex. "sweetened-beverages" contient "sweet" mais doit rester une boisson).
@@ -299,6 +304,7 @@ export function suggestCategory(source: LookupSource, product: OpenFactsProduct)
   if (matchesAny(tags, FRESH_KEYWORDS)) return 'produits_frais';
   if (matchesAny(tags, TEA_KEYWORDS)) return 'thes';
   if (matchesAny(tags, COFFEE_KEYWORDS)) return 'cafes';
+  if (matchesAny(tags, SPICE_KEYWORDS)) return 'epices';
   if (matchesAny(tags, BEVERAGE_KEYWORDS)) return 'boissons';
   if (matchesAny(tags, SWEET_KEYWORDS)) return 'epicerie_sucree';
   if (matchesAny(tags, SALTY_KEYWORDS)) return 'epicerie_salee';

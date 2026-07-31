@@ -178,4 +178,10 @@ describe('isLastContainerGauge', () => {
       isLastContainerGauge({ ...base, categorie: 'cafes', unite: 'g', contenance_unitaire: 250, quantite_totale: 80 }),
     ).toBe(true);
   });
+
+  it("vrai pour la catégorie 'epices' (ex: dernier pot d'épices entamé)", () => {
+    expect(
+      isLastContainerGauge({ ...base, categorie: 'epices', unite: 'g', contenance_unitaire: 40, quantite_totale: 10 }),
+    ).toBe(true);
+  });
 });

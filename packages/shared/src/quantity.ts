@@ -103,14 +103,21 @@ export function resetNiveauDernierContenant(
   return isLastContainerQuantity(quantiteTotale, contenanceUnitaire) ? niveauActuel : null;
 }
 
-// Pour entretien/hygiène/boissons/thés/cafés, "combien de paquets restants" perd son sens une fois
-// qu'il n'en reste qu'un : mieux vaut jauger le niveau du dernier contenant en pourcentage (ex. le
-// dernier flacon de vinaigre passe de 100% à 50%, le dernier paquet de "thé vert menthe" de 100% à
-// 30%) que de compter en fractions de contenant. Purement cosmétique (cf.
+// Pour entretien/hygiène/boissons/thés/cafés/épices, "combien de paquets restants" perd son sens
+// une fois qu'il n'en reste qu'un : mieux vaut jauger le niveau du dernier contenant en pourcentage
+// (ex. le dernier flacon de vinaigre passe de 100% à 50%, le dernier paquet de "thé vert menthe" de
+// 100% à 30%) que de compter en fractions de contenant. Purement cosmétique (cf.
 // InventoryLine.niveau_dernier_contenant) : le stock réel (le "vrai compte") reste toujours un
 // nombre entier de contenants. Partagé entre Sortie ET Entrée : le niveau doit être réglable des
 // deux côtés, exactement comme pour un produit en `unite='pourcent'`.
-export const GAUGE_CATEGORIES: Category[] = ['produits_entretien', 'cosmetiques_hygiene', 'boissons', 'thes', 'cafes'];
+export const GAUGE_CATEGORIES: Category[] = [
+  'produits_entretien',
+  'cosmetiques_hygiene',
+  'boissons',
+  'thes',
+  'cafes',
+  'epices',
+];
 
 export function isLastContainerGauge(line: {
   categorie: Category;

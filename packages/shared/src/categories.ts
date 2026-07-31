@@ -9,6 +9,7 @@ export const CATEGORIES = [
   'boissons',
   'thes',
   'cafes',
+  'epices',
   'cosmetiques_hygiene',
   'produits_entretien',
 ] as const;
@@ -25,6 +26,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   boissons: 'Boissons',
   thes: 'Thés',
   cafes: 'Cafés',
+  epices: 'Épices',
   cosmetiques_hygiene: 'Cosmétiques / hygiène',
   produits_entretien: "Produits d'entretien",
 };

@@ -161,6 +161,20 @@ describe('suggestCategory', () => {
     );
   });
 
+  it('classe une épice en "Épices" plutôt qu\'en "Épicerie salée", même taguée comme condiment', () => {
+    expect(
+      suggestCategory('open-food-facts', product({ categories_tags: ['en:condiments', 'en:spices', 'en:pepper'] })),
+    ).toBe('epices');
+    expect(suggestCategory('open-food-facts', product({ categories: 'Condiments, Épices, Poivres' }))).toBe('epices');
+  });
+
+  it("ne confond pas Épicerie (fine/salée/sucrée) avec Épices via le préfixe partagé", () => {
+    expect(suggestCategory('open-food-facts', product({ categories: 'Épicerie salée, Pâtes, Riz' }))).not.toBe(
+      'epices',
+    );
+    expect(suggestCategory('open-food-facts', product({ categories: 'Épicerie fine, Foie gras' }))).not.toBe('epices');
+  });
+
   it('classe un produit entretien via mots-clés français (lessive, nettoyant)', () => {
     expect(suggestCategory('open-products-facts', product({ categories: 'Entretien de la maison, Lessives' }))).toBe(
       'produits_entretien',
