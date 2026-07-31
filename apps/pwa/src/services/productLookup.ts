@@ -206,6 +206,11 @@ const FRESH_KEYWORDS = [
 // qui matcherait l'anglais "the" dans n'importe quel tag) : formes plus longues/sûres uniquement,
 // même logique que "vins"/"salee" ailleurs dans ce fichier.
 const TEA_KEYWORDS = ['teas', 'thes', 'infusion', 'infusions', 'tisane', 'tisanes', 'rooibos'];
+// Même logique que TEA_KEYWORDS : le café est catégorisé par Open Food Facts comme une
+// sous-catégorie de "beverages" (ex. tags "hot-beverages, coffees"), testé AVANT BEVERAGE_KEYWORDS
+// pour que "Cafés" gagne sur "Boissons". "cafe"/"cafes" sans risque de faux positif ici (pas de
+// mot français courant qui les contienne accidentellement, contrairement à "the"/"vin"/"sale").
+const COFFEE_KEYWORDS = ['cafes', 'cafe', 'coffee', 'coffees', 'espresso', 'expresso'];
 // Eau, soda, jus, vin, bière... vont dans "Boissons", pas "Épicerie sucrée" (une boisson n'est
 // pas un produit sucré). Testé AVANT les mots-clés sucré/salé pour éviter tout chevauchement
 // (ex. "sweetened-beverages" contient "sweet" mais doit rester une boisson).
@@ -293,6 +298,7 @@ export function suggestCategory(source: LookupSource, product: OpenFactsProduct)
   if (matchesAny(tags, VEGETABLE_KEYWORDS)) return 'legumes';
   if (matchesAny(tags, FRESH_KEYWORDS)) return 'produits_frais';
   if (matchesAny(tags, TEA_KEYWORDS)) return 'thes';
+  if (matchesAny(tags, COFFEE_KEYWORDS)) return 'cafes';
   if (matchesAny(tags, BEVERAGE_KEYWORDS)) return 'boissons';
   if (matchesAny(tags, SWEET_KEYWORDS)) return 'epicerie_sucree';
   if (matchesAny(tags, SALTY_KEYWORDS)) return 'epicerie_salee';

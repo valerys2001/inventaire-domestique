@@ -143,6 +143,24 @@ describe('suggestCategory', () => {
     expect(suggestCategory('open-food-facts', product({ categories: 'Infusions, Tisanes, Camomille' }))).toBe('thes');
   });
 
+  it('classe un café en "Cafés" plutôt qu\'en "Boissons", même tagué comme sous-catégorie de beverages', () => {
+    expect(
+      suggestCategory(
+        'open-food-facts',
+        product({ categories_tags: ['en:beverages', 'en:hot-beverages', 'en:coffees'] }),
+      ),
+    ).toBe('cafes');
+    expect(suggestCategory('open-food-facts', product({ categories: 'Boissons chaudes, Cafés, Cafés moulus' }))).toBe(
+      'cafes',
+    );
+  });
+
+  it('classe un café en dosettes/capsules en "Cafés"', () => {
+    expect(suggestCategory('open-food-facts', product({ categories: 'Cafés, Capsules de café, Espresso' }))).toBe(
+      'cafes',
+    );
+  });
+
   it('classe un produit entretien via mots-clés français (lessive, nettoyant)', () => {
     expect(suggestCategory('open-products-facts', product({ categories: 'Entretien de la maison, Lessives' }))).toBe(
       'produits_entretien',

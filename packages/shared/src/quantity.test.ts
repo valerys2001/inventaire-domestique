@@ -172,4 +172,10 @@ describe('isLastContainerGauge', () => {
       true,
     );
   });
+
+  it("vrai pour la catégorie 'cafes' (ex: dernier paquet de café entamé)", () => {
+    expect(
+      isLastContainerGauge({ ...base, categorie: 'cafes', unite: 'g', contenance_unitaire: 250, quantite_totale: 80 }),
+    ).toBe(true);
+  });
 });
